@@ -35,9 +35,12 @@ from .const import (
     DEFAULT_DURATION_HOURS,
     DEFAULT_MAX_USES,
     DOMAIN,
+    EVENT_ACTIVITY_CLEARED,
     EVENT_PASS_CREATED,
     EVENT_PASS_REVOKED,
+    SERVICE_CLEAR_ACTIVITY,
     SERVICE_CREATE_PASS,
+    SERVICE_LIST_ACTIVITY,
     SERVICE_LIST_PASSES,
     SERVICE_REVOKE_ALL,
     SERVICE_REVOKE_PASS,
@@ -111,6 +114,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             "passes": await runtime.manager.async_list_active(),
         }
 
+    async def async_list_activity(call: ServiceCall) -> ServiceResponse:
+        runtime = _get_runtime(hass)
+        return {
+            "access_name": runtime.config[CONF_ACCESS_NAME],
+            "activity": await runtime.manager.async_list_activity(),
+        }
+
+    async def async_clear_activity(call: ServiceCall) -> ServiceResponse:
+        runtime = _get_runtime(hass)
+        count = await runtime.manager.async_clear_activity()
+        hass.bus.async_fire(EVENT_ACTIVITY_CLEARED, {"count": count})
+        response = {"success": True, "count": count}
+        return response if call.return_response else None
+
     async def async_revoke_pass(call: ServiceCall) -> ServiceResponse:
         runtime = _get_runtime(hass)
         pass_id = str(call.data[ATTR_PASS_ID])
@@ -154,6 +171,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         async_list_passes,
         schema=vol.Schema({}),
         supports_response=SupportsResponse.ONLY,
+    )
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_LIST_ACTIVITY,
+        async_list_activity,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_CLEAR_ACTIVITY,
+        async_clear_activity,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.OPTIONAL,
     )
     async_register_admin_service(
         hass,

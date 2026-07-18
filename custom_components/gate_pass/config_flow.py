@@ -19,6 +19,7 @@ from .const import (
     CONF_DEFAULT_MAX_USES,
     CONF_ENTITY_ID,
     CONF_GUEST_PORT,
+    CONF_NOTIFICATION_SERVICE,
     CONF_PUBLIC_BASE_URL,
     CONF_SERVICE,
     DEFAULT_ACCESS_NAME,
@@ -29,7 +30,12 @@ from .const import (
     DEFAULT_SERVICE,
     DOMAIN,
 )
-from .validation import normalize_public_base_url, normalize_service, service_domain
+from .validation import (
+    normalize_notification_service,
+    normalize_public_base_url,
+    normalize_service,
+    service_domain,
+)
 
 
 def _schema(current: Mapping[str, Any] | None = None) -> vol.Schema:
@@ -70,6 +76,10 @@ def _schema(current: Mapping[str, Any] | None = None) -> vol.Schema:
                 CONF_PUBLIC_BASE_URL,
                 default=current.get(CONF_PUBLIC_BASE_URL, ""),
             ): selector.TextSelector(),
+            vol.Optional(
+                CONF_NOTIFICATION_SERVICE,
+                default=current.get(CONF_NOTIFICATION_SERVICE, ""),
+            ): selector.TextSelector(),
             vol.Required(
                 CONF_DEFAULT_DURATION_HOURS,
                 default=current.get(
@@ -109,6 +119,9 @@ def _validate(user_input: dict[str, Any]) -> dict[str, Any]:
     result[CONF_PUBLIC_BASE_URL] = normalize_public_base_url(
         result.get(CONF_PUBLIC_BASE_URL, "")
     )
+    result[CONF_NOTIFICATION_SERVICE] = normalize_notification_service(
+        result.get(CONF_NOTIFICATION_SERVICE, "")
+    )
     result[CONF_GUEST_PORT] = int(result[CONF_GUEST_PORT])
     result[CONF_DEFAULT_DURATION_HOURS] = float(result[CONF_DEFAULT_DURATION_HOURS])
     result[CONF_DEFAULT_MAX_USES] = int(result[CONF_DEFAULT_MAX_USES])
@@ -145,6 +158,8 @@ class GatePassConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 reason = str(err)
                 if reason == "invalid_url":
                     errors[CONF_PUBLIC_BASE_URL] = "invalid_url"
+                elif reason == "invalid_notification_service":
+                    errors[CONF_NOTIFICATION_SERVICE] = "invalid_notification_service"
                 elif reason == "invalid_service":
                     errors[CONF_SERVICE] = "invalid_service"
                 elif reason == "domain_mismatch":
@@ -186,6 +201,8 @@ class GatePassOptionsFlow(OptionsFlow):
                 reason = str(err)
                 if reason == "invalid_url":
                     errors[CONF_PUBLIC_BASE_URL] = "invalid_url"
+                elif reason == "invalid_notification_service":
+                    errors[CONF_NOTIFICATION_SERVICE] = "invalid_notification_service"
                 elif reason == "invalid_service":
                     errors[CONF_SERVICE] = "invalid_service"
                 elif reason == "domain_mismatch":

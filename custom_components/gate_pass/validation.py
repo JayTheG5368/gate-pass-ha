@@ -55,6 +55,20 @@ def normalize_service(value: Any) -> str:
     return value
 
 
+def normalize_notification_service(value: Any) -> str:
+    """Validate an optional classic Home Assistant notify service."""
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise vol.Invalid("invalid_notification_service")
+    value = value.strip().lower()
+    if not value:
+        return ""
+    if not _SERVICE_PATTERN.fullmatch(value) or not value.startswith("notify."):
+        raise vol.Invalid("invalid_notification_service")
+    return value
+
+
 def service_domain(service: str) -> str:
     """Return the domain part of a validated service name."""
     return service.partition(".")[0]

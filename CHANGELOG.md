@@ -2,6 +2,21 @@
 
 All notable changes to Gate Pass HA are documented here.
 
+## [0.3.0-beta.1] - Unreleased local test
+
+### Added
+
+- Persistent administrator-only activity history for pass creation, successful
+  use, and revocation
+- Activity tab and confirmed history clearing in the Lovelace card
+- Optional classic `notify.*` service after a successful guest action
+
+### Security
+
+- Activity records exclude guest secrets, IP addresses, and browser identifiers
+- Notification targets and contents remain fixed in administrator configuration
+- Failed notifications do not retry or repeat the configured access action
+
 ## [0.2.1] - 2026-07-18
 
 ### Added

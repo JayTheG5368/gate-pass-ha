@@ -25,6 +25,10 @@ create_pass:
 
 list_passes: {}
 
+list_activity: {}
+
+clear_activity: {}
+
 revoke_pass:
   fields:
     pass_id:

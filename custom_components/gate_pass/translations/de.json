@@ -12,17 +12,20 @@
           "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
+          "notification_service": "Dienst für Erfolgsbenachrichtigung (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
           "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
         },
         "data_description": {
           "service": "Für einen Button beispielsweise button.press.",
-          "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL."
+          "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
+          "notification_service": "Klassischer Home-Assistant-Dienst, beispielsweise notify.mobile_app_phone. Leer lassen zum Deaktivieren."
         }
       }
     },
     "error": {
       "invalid_url": "Gib eine gueltige HTTP- oder HTTPS-URL ein.",
+      "invalid_notification_service": "Gib einen notify.*-Dienst ein oder lasse das Feld leer.",
       "invalid_service": "Die Aktion muss das Format domain.service haben.",
       "domain_mismatch": "Entity und Aktion muessen dieselbe Domain verwenden.",
       "invalid_config": "Pruefe die eingegebenen Werte."
@@ -41,17 +44,20 @@
           "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
+          "notification_service": "Dienst für Erfolgsbenachrichtigung (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
           "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
         },
         "data_description": {
           "service": "Für einen Button beispielsweise button.press.",
-          "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL."
+          "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
+          "notification_service": "Klassischer Home-Assistant-Dienst, beispielsweise notify.mobile_app_phone. Leer lassen zum Deaktivieren."
         }
       }
     },
     "error": {
       "invalid_url": "Gib eine gueltige HTTP- oder HTTPS-URL ein.",
+      "invalid_notification_service": "Gib einen notify.*-Dienst ein oder lasse das Feld leer.",
       "invalid_service": "Die Aktion muss das Format domain.service haben.",
       "domain_mismatch": "Entity und Aktion muessen dieselbe Domain verwenden.",
       "invalid_config": "Pruefe die eingegebenen Werte."
@@ -83,6 +89,14 @@
     "list_passes": {
       "name": "Aktive Zugänge auflisten",
       "description": "Gibt alle derzeit aktiven Zugänge zurück."
+    },
+    "list_activity": {
+      "name": "Aktivitäten auflisten",
+      "description": "Gibt den gespeicherten Verlauf ohne Link-Geheimnisse oder Netzwerkkennungen zurück."
+    },
+    "clear_activity": {
+      "name": "Aktivitäten löschen",
+      "description": "Löscht alle gespeicherten Gate-Pass-Aktivitäten dauerhaft."
     },
     "revoke_pass": {
       "name": "Zugang widerrufen",

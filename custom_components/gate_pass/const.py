@@ -10,6 +10,7 @@ CONF_ENTITY_ID: Final = "entity_id"
 CONF_SERVICE: Final = "service"
 CONF_GUEST_PORT: Final = "guest_port"
 CONF_PUBLIC_BASE_URL: Final = "public_base_url"
+CONF_NOTIFICATION_SERVICE: Final = "notification_service"
 CONF_DEFAULT_DURATION_HOURS: Final = "default_duration_hours"
 CONF_DEFAULT_MAX_USES: Final = "default_max_uses"
 
@@ -22,6 +23,8 @@ DEFAULT_MAX_USES: Final = 1
 
 SERVICE_CREATE_PASS: Final = "create_pass"
 SERVICE_LIST_PASSES: Final = "list_passes"
+SERVICE_LIST_ACTIVITY: Final = "list_activity"
+SERVICE_CLEAR_ACTIVITY: Final = "clear_activity"
 SERVICE_REVOKE_PASS: Final = "revoke_pass"
 SERVICE_REVOKE_ALL: Final = "revoke_all"
 
@@ -34,7 +37,9 @@ ATTR_PASS_ID: Final = "pass_id"
 EVENT_PASS_CREATED: Final = "gate_pass_created"
 EVENT_PASS_REVOKED: Final = "gate_pass_revoked"
 EVENT_PASS_USED: Final = "gate_pass_used"
+EVENT_ACTIVITY_CLEARED: Final = "gate_pass_activity_cleared"
 
 CARD_URL: Final = "/gate-pass/gate-pass-card.js"
 STORAGE_KEY: Final = f"{DOMAIN}.passes"
 STORAGE_VERSION: Final = 1
+ACTIVITY_LIMIT: Final = 200

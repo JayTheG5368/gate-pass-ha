@@ -10,6 +10,8 @@ import hmac
 import secrets
 from typing import Any, Protocol
 
+from .const import ACTIVITY_LIMIT
+
 
 class PassStorage(Protocol):
     """Storage interface used by the pass manager."""
@@ -53,6 +55,7 @@ class PassManager:
         self._storage = storage
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._passes: dict[str, dict[str, Any]] = {}
+        self._activity: list[dict[str, Any]] = []
         self._reserved: set[str] = set()
         self._lock = asyncio.Lock()
 
@@ -67,6 +70,16 @@ class PassManager:
             for item in stored
             if isinstance(item, dict) and isinstance(item.get("pass_id"), str)
         }
+        activity = data.get("activity", [])
+        if not isinstance(activity, list):
+            activity = []
+        self._activity = [
+            item
+            for item in activity[-ACTIVITY_LIMIT:]
+            if isinstance(item, dict)
+            and isinstance(item.get("event_type"), str)
+            and isinstance(item.get("occurred_at"), str)
+        ]
         await self.async_list_active()
 
     async def async_create(
@@ -104,6 +117,7 @@ class PassManager:
 
         async with self._lock:
             self._passes[pass_id] = record
+            self._append_activity_locked("created", record, occurred_at=now)
             await self._async_save_locked()
 
         return self._safe(record), secret
@@ -146,10 +160,12 @@ class PassManager:
 
             record = self._passes[pass_id]
             record["use_count"] = int(record.get("use_count", 0)) + 1
-            record["last_used_at"] = self._now().isoformat()
+            used_at = self._as_utc(self._now())
+            record["last_used_at"] = used_at.isoformat()
             max_uses = int(record.get("max_uses", 0))
             if max_uses > 0 and record["use_count"] >= max_uses:
                 record["active"] = False
+            self._append_activity_locked("used", record, occurred_at=used_at)
             await self._async_save_locked()
             return self._safe(record)
 
@@ -174,13 +190,29 @@ class PassManager:
                 if record.get("active")
             ]
 
+    async def async_list_activity(self) -> list[dict[str, Any]]:
+        """Return the newest persistent activity records first."""
+        async with self._lock:
+            return [dict(item) for item in reversed(self._activity)]
+
+    async def async_clear_activity(self) -> int:
+        """Clear all persistent activity records and return the removed count."""
+        async with self._lock:
+            count = len(self._activity)
+            if count:
+                self._activity.clear()
+                await self._async_save_locked()
+            return count
+
     async def async_revoke(self, pass_id: str) -> bool:
         """Revoke one pass."""
         async with self._lock:
             record = self._passes.get(pass_id)
             if record is None:
                 return False
-            record["active"] = False
+            if record.get("active"):
+                record["active"] = False
+                self._append_activity_locked("revoked", record)
             await self._async_save_locked()
             return True
 
@@ -191,6 +223,7 @@ class PassManager:
             for record in self._passes.values():
                 if record.get("active"):
                     record["active"] = False
+                    self._append_activity_locked("revoked", record)
                     count += 1
             if count:
                 await self._async_save_locked()
@@ -255,7 +288,35 @@ class PassManager:
         return value.astimezone(timezone.utc)
 
     async def _async_save_locked(self) -> None:
-        await self._storage.async_save({"passes": list(self._passes.values())})
+        await self._storage.async_save(
+            {
+                "passes": list(self._passes.values()),
+                "activity": self._activity,
+            }
+        )
+
+    def _append_activity_locked(
+        self,
+        event_type: str,
+        record: dict[str, Any],
+        *,
+        occurred_at: datetime | None = None,
+    ) -> None:
+        """Append a privacy-conscious activity record while holding the lock."""
+        timestamp = self._as_utc(occurred_at or self._now()).isoformat()
+        self._activity.append(
+            {
+                "event_id": "ga_" + secrets.token_urlsafe(8),
+                "event_type": event_type,
+                "occurred_at": timestamp,
+                "pass_id": str(record.get("pass_id", "")),
+                "label": str(record.get("label", "Gast")),
+                "use_count": int(record.get("use_count", 0)),
+                "max_uses": int(record.get("max_uses", 0)),
+            }
+        )
+        if len(self._activity) > ACTIVITY_LIMIT:
+            del self._activity[:-ACTIVITY_LIMIT]
 
     @staticmethod
     def _hash_secret(secret: str) -> str:

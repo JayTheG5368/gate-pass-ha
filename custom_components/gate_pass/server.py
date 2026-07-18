@@ -15,6 +15,7 @@ from .const import (
     CONF_ACTION_LABEL,
     CONF_ENTITY_ID,
     CONF_GUEST_PORT,
+    CONF_NOTIFICATION_SERVICE,
     CONF_PUBLIC_BASE_URL,
     CONF_SERVICE,
     EVENT_PASS_USED,
@@ -417,7 +418,43 @@ class GuestServer:
                 "use_count": committed["use_count"],
             },
         )
+        await self._async_send_success_notification(guest_pass["label"])
         return web.json_response({"success": True}, headers=API_HEADERS)
+
+    async def _async_send_success_notification(self, label: str) -> None:
+        """Send the optional administrator-configured success notification."""
+        notification_service = str(
+            self.config.get(CONF_NOTIFICATION_SERVICE, "")
+        ).strip()
+        if not notification_service:
+            return
+
+        domain, _, service = notification_service.partition(".")
+        if not self.hass.services.has_service(domain, service):
+            _LOGGER.warning(
+                "Gate Pass notification service %s is unavailable",
+                notification_service,
+            )
+            return
+
+        access_name = str(self.config[CONF_ACCESS_NAME])
+        language = str(getattr(self.hass.config, "language", "en")).lower()
+        if language.startswith("de"):
+            message = f'"{label}" hat den Zugang erfolgreich verwendet.'
+        else:
+            message = f'"{label}" successfully used the access link.'
+        try:
+            await self.hass.services.async_call(
+                domain,
+                service,
+                {
+                    "title": f"Gate Pass: {access_name}",
+                    "message": message,
+                },
+                blocking=True,
+            )
+        except Exception:
+            _LOGGER.exception("Gate Pass success notification failed")
 
     @staticmethod
     def _check_browser_origin(request: web.Request) -> bool:

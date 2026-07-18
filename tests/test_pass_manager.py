@@ -164,3 +164,61 @@ async def test_revoke_during_reserved_action_still_allows_commit() -> None:
 
     assert committed["use_count"] == 1
     assert committed["active"] is False
+
+
+@pytest.mark.asyncio
+async def test_activity_is_persistent_newest_first_and_contains_no_secret() -> None:
+    storage = MemoryStorage()
+    manager = PassManager(storage)
+    await manager.async_load()
+    guest_pass, secret = await manager.async_create(
+        label="Paketdienst", duration_hours=1, max_uses=2
+    )
+
+    await manager.async_reserve_use(guest_pass["pass_id"], secret)
+    await manager.async_commit_use(guest_pass["pass_id"])
+
+    reloaded = PassManager(storage)
+    await reloaded.async_load()
+    activity = await reloaded.async_list_activity()
+
+    assert [item["event_type"] for item in activity] == ["used", "created"]
+    assert activity[0]["label"] == "Paketdienst"
+    assert activity[0]["use_count"] == 1
+    assert secret not in str(storage.data)
+    assert all("secret" not in item for item in activity)
+
+
+@pytest.mark.asyncio
+async def test_revoke_is_recorded_and_activity_can_be_cleared() -> None:
+    storage = MemoryStorage()
+    manager = PassManager(storage)
+    await manager.async_load()
+    guest_pass, _secret = await manager.async_create(
+        label="Gast", duration_hours=1, max_uses=1
+    )
+
+    assert await manager.async_revoke(guest_pass["pass_id"])
+    assert [item["event_type"] for item in await manager.async_list_activity()] == [
+        "revoked",
+        "created",
+    ]
+    assert await manager.async_clear_activity() == 2
+    assert await manager.async_list_activity() == []
+    assert storage.data is not None
+    assert storage.data["activity"] == []
+
+
+@pytest.mark.asyncio
+async def test_activity_retains_only_the_latest_200_records() -> None:
+    storage = MemoryStorage()
+    manager = PassManager(storage)
+    await manager.async_load()
+
+    for index in range(205):
+        await manager.async_create(label=f"Gast {index}", duration_hours=1, max_uses=1)
+
+    activity = await manager.async_list_activity()
+    assert len(activity) == 200
+    assert activity[0]["label"] == "Gast 204"
+    assert activity[-1]["label"] == "Gast 5"

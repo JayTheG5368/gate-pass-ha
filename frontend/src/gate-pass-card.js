@@ -44,6 +44,11 @@ const TEXT = {
     cardTitle: 'Kartentitel', cardTitlePlaceholder: 'z. B. Tor-Zugänge',
     cardIcon: 'Kartensymbol', cardIconPlaceholder: 'mdi:garage-variant',
     defaultName: 'Standardname', defaultNamePlaceholder: 'Link von {user}',
+    activity: 'Verlauf', noActivity: 'Noch keine Aktivitäten', clearActivity: 'Verlauf löschen',
+    confirmClearActivity: 'Den gesamten Aktivitätsverlauf dauerhaft löschen?',
+    clearActivityError: 'Verlauf konnte nicht gelöscht werden.',
+    activityCreated: 'Zugang erstellt', activityUsed: 'Zugang verwendet',
+    activityRevoked: 'Zugang widerrufen', activityUnknown: 'Aktivität',
   },
   en: {
     title: 'Gate Pass', active: 'Active passes', create: 'Create pass',
@@ -65,6 +70,11 @@ const TEXT = {
     cardTitle: 'Card title', cardTitlePlaceholder: 'e.g. Gate access',
     cardIcon: 'Card icon', cardIconPlaceholder: 'mdi:garage-variant',
     defaultName: 'Default name', defaultNamePlaceholder: 'Link by {user}',
+    activity: 'Activity', noActivity: 'No activity yet', clearActivity: 'Clear activity',
+    confirmClearActivity: 'Permanently clear the complete activity history?',
+    clearActivityError: 'Activity could not be cleared.',
+    activityCreated: 'Pass created', activityUsed: 'Pass used',
+    activityRevoked: 'Pass revoked', activityUnknown: 'Activity',
   },
 };
 
@@ -73,6 +83,8 @@ class GatePassCard extends LitElement {
     _hass: { state: true },
     _config: { state: true },
     _passes: { state: true },
+    _activity: { state: true },
+    _view: { state: true },
     _accessName: { state: true },
     _showForm: { state: true },
     _newPass: { state: true },
@@ -87,6 +99,8 @@ class GatePassCard extends LitElement {
   constructor() {
     super();
     this._passes = [];
+    this._activity = [];
+    this._view = 'active';
     this._accessName = '';
     this._showForm = false;
     this._newPass = null;
@@ -135,7 +149,7 @@ class GatePassCard extends LitElement {
   async _subscribe() {
     if (!this._hass?.connection || this._eventUnsubs.length) return;
     try {
-      for (const event of ['gate_pass_created', 'gate_pass_revoked', 'gate_pass_used']) {
+      for (const event of ['gate_pass_created', 'gate_pass_revoked', 'gate_pass_used', 'gate_pass_activity_cleared']) {
         const unsubscribe = await this._hass.connection.subscribeEvents(() => this._refresh(), event);
         this._eventUnsubs.push(unsubscribe);
       }
@@ -155,11 +169,17 @@ class GatePassCard extends LitElement {
     if (!this._hass || this._loading) return;
     this._loading = true;
     try {
-      const result = await this._hass.callWS({
-        type: 'call_service', domain: 'gate_pass', service: 'list_passes', return_response: true,
-      });
-      this._passes = result?.response?.passes || [];
-      this._accessName = result?.response?.access_name || '';
+      const [passesResult, activityResult] = await Promise.all([
+        this._hass.callWS({
+          type: 'call_service', domain: 'gate_pass', service: 'list_passes', return_response: true,
+        }),
+        this._hass.callWS({
+          type: 'call_service', domain: 'gate_pass', service: 'list_activity', return_response: true,
+        }),
+      ]);
+      this._passes = passesResult?.response?.passes || [];
+      this._activity = activityResult?.response?.activity || [];
+      this._accessName = passesResult?.response?.access_name || activityResult?.response?.access_name || '';
       this._error = '';
     } catch (error) {
       this._error = `${this._text.loadError} ${error.message || ''}`.trim();
@@ -234,6 +254,23 @@ class GatePassCard extends LitElement {
       this._error = '';
     } catch (error) {
       this._error = `${this._text.revokeError} ${error.message || ''}`.trim();
+    } finally {
+      this._loading = false;
+    }
+  }
+
+  async _clearActivity() {
+    if (!window.confirm(this._text.confirmClearActivity)) return;
+    this._loading = true;
+    try {
+      await this._hass.callWS({
+        type: 'call_service', domain: 'gate_pass', service: 'clear_activity',
+        return_response: true,
+      });
+      this._activity = [];
+      this._error = '';
+    } catch (error) {
+      this._error = `${this._text.clearActivityError} ${error.message || ''}`.trim();
     } finally {
       this._loading = false;
     }
@@ -331,6 +368,7 @@ class GatePassCard extends LitElement {
   }
 
   _toggleForm() {
+    this._view = 'active';
     this._showForm = !this._showForm;
     if (this._showForm) this._draftLabel = this._defaultLabel();
     else this._draftLabel = null;
@@ -370,10 +408,26 @@ class GatePassCard extends LitElement {
         ${this._showForm ? this._renderForm(t) : ''}
         ${this._newPass ? this._renderResult(t) : ''}
 
-        <section>
-          <div class="section-heading"><h3>${t.active} <span>${this._passes.length}</span></h3>${this._passes.length ? html`<ha-button class="danger" @click=${this._revokeAll}>${t.revokeAll}</ha-button>` : ''}</div>
-          ${this._passes.length ? this._passes.map((pass) => this._renderPass(pass, t)) : html`<div class="empty"><ha-icon icon="mdi:ticket-outline"></ha-icon><span>${t.noPasses}</span></div>`}
-        </section>
+        <nav class="tabs" aria-label=${t.title}>
+          <button type="button" class=${this._view === 'active' ? 'tab active' : 'tab'} aria-pressed=${this._view === 'active'} @click=${() => { this._view = 'active'; }}>
+            <ha-icon icon="mdi:ticket-confirmation-outline"></ha-icon><span>${t.active}</span><strong>${this._passes.length}</strong>
+          </button>
+          <button type="button" class=${this._view === 'activity' ? 'tab active' : 'tab'} aria-pressed=${this._view === 'activity'} @click=${() => { this._view = 'activity'; }}>
+            <ha-icon icon="mdi:history"></ha-icon><span>${t.activity}</span><strong>${this._activity.length}</strong>
+          </button>
+        </nav>
+
+        ${this._view === 'active' ? html`
+          <section>
+            <div class="section-heading"><h3>${t.active}</h3>${this._passes.length ? html`<ha-button class="danger" @click=${this._revokeAll}>${t.revokeAll}</ha-button>` : ''}</div>
+            ${this._passes.length ? this._passes.map((pass) => this._renderPass(pass, t)) : html`<div class="empty"><ha-icon icon="mdi:ticket-outline"></ha-icon><span>${t.noPasses}</span></div>`}
+          </section>
+        ` : html`
+          <section>
+            <div class="section-heading"><h3>${t.activity}</h3>${this._activity.length ? html`<ha-button class="danger" @click=${this._clearActivity}>${t.clearActivity}</ha-button>` : ''}</div>
+            ${this._activity.length ? this._activity.map((item) => this._renderActivity(item, t)) : html`<div class="empty"><ha-icon icon="mdi:history"></ha-icon><span>${t.noActivity}</span></div>`}
+          </section>
+        `}
       </ha-card>
     `;
   }
@@ -444,8 +498,30 @@ class GatePassCard extends LitElement {
     `;
   }
 
+  _renderActivity(item, t) {
+    const eventLabels = {
+      created: t.activityCreated,
+      used: t.activityUsed,
+      revoked: t.activityRevoked,
+    };
+    const eventIcons = {
+      created: 'mdi:ticket-plus-outline',
+      used: 'mdi:door-open',
+      revoked: 'mdi:ticket-remove-outline',
+    };
+    const occurredAt = new Date(item.occurred_at);
+    const time = Number.isNaN(occurredAt.getTime()) ? '' : occurredAt.toLocaleString();
+    return html`
+      <div class="activity-row">
+        <div class="pass-icon"><ha-icon icon=${eventIcons[item.event_type] || 'mdi:history'}></ha-icon></div>
+        <div class="pass-info"><strong>${item.label}</strong><span>${eventLabels[item.event_type] || t.activityUnknown}${time ? ` · ${time}` : ''}</span></div>
+      </div>
+    `;
+  }
+
   getCardSize() {
-    return 3 + Math.max(1, this._passes.length) + (this._newPass ? 4 : 0) + (this._showForm ? 3 : 0);
+    const visibleRows = this._view === 'activity' ? this._activity.length : this._passes.length;
+    return 3 + Math.max(1, visibleRows) + (this._newPass ? 4 : 0) + (this._showForm ? 3 : 0);
   }
 
   static getConfigElement() { return document.createElement('gate-pass-card-editor'); }
@@ -467,8 +543,13 @@ class GatePassCard extends LitElement {
     h2, h3, p { margin:0; } h2 { font-size:1.15rem; } h3 { font-size:.95rem; }
     .title-block p { color:var(--secondary-text-color); font-size:.78rem; margin-top:2px; }
     .header-actions { gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .tabs { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); margin-top:14px; border-bottom:1px solid var(--divider-color); }
+    .tab { min-width:0; min-height:44px; display:flex; align-items:center; justify-content:center; gap:7px; padding:8px 10px; border:0; border-bottom:3px solid transparent; background:transparent; color:var(--secondary-text-color); font:inherit; font-size:.82rem; font-weight:600; line-height:1.2; cursor:pointer; letter-spacing:0; }
+    .tab.active { color:var(--primary-color); border-bottom-color:var(--primary-color); }
+    .tab ha-icon { --mdc-icon-size:19px; flex:0 0 auto; }
+    .tab span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .tab strong { min-width:22px; height:22px; display:inline-grid; place-items:center; padding:0 6px; border-radius:8px; background:var(--secondary-background-color); color:var(--primary-text-color); font-size:.72rem; }
     section { padding-top:16px; } .section-heading { justify-content:space-between; margin-bottom:8px; }
-    .section-heading h3 span { display:inline-grid; place-items:center; min-width:22px; height:22px; padding:0 6px; border-radius:8px; background:var(--secondary-background-color); font-size:.75rem; }
     form, .result { margin-top:14px; padding:14px 0 16px; border-bottom:1px solid var(--divider-color); }
     label { display:block; min-width:0; } label span { display:block; color:var(--secondary-text-color); font-size:.78rem; margin-bottom:5px; }
     input, select { display:block; width:100%; min-width:0; height:44px; padding:8px 10px; border:1px solid var(--divider-color); border-radius:6px; background:var(--card-background-color); color:var(--primary-text-color); font:inherit; letter-spacing:0; }
@@ -477,6 +558,8 @@ class GatePassCard extends LitElement {
     .full-width { grid-column:1 / -1; }
     .form-actions, .result-actions { justify-content:flex-end; gap:8px; margin-top:12px; }
     .pass-row { display:grid; grid-template-columns:38px minmax(0,1fr) 44px; align-items:center; gap:8px; min-height:58px; border-bottom:1px solid var(--divider-color); }
+    .activity-row { display:grid; grid-template-columns:38px minmax(0,1fr); align-items:center; gap:8px; min-height:58px; border-bottom:1px solid var(--divider-color); }
+    .activity-row:last-child { border-bottom:0; }
     .pass-row:last-child { border-bottom:0; } .pass-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:6px; background:var(--secondary-background-color); color:var(--primary-color); }
     .pass-info { min-width:0; } .pass-info strong, .pass-info span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .pass-info strong { font-size:.9rem; } .pass-info span { color:var(--secondary-text-color); font-size:.76rem; margin-top:3px; }
@@ -496,6 +579,10 @@ class GatePassCard extends LitElement {
       .form-grid { grid-template-columns:minmax(0,1fr); }
       .form-actions, .result-actions { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
       .form-actions ha-button, .result-actions ha-button { width:100%; }
+    }
+    @media (max-width:380px) {
+      .tab { min-height:52px; gap:4px; padding-inline:4px; }
+      .tab span { white-space:normal; line-height:1.1; }
     }
   `;
 }

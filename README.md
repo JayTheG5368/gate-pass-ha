@@ -25,6 +25,8 @@ points without exposing general Home Assistant controls to guests.
 - QR code and link generation in a Lovelace card
 - Mobile-friendly validity and use selectors
 - Individual and bulk revocation with confirmation
+- Persistent activity history for creation, successful use, and revocation
+- Optional notification after a guest successfully uses a pass
 - Automatic guest-page light/dark theme with a manual toggle
 - Separate guest web server for Cloudflare Tunnel and reverse proxies
 - Admin-only pass creation, listing, and revocation
@@ -68,6 +70,7 @@ Open **Settings -> Devices & services -> Add integration**, search for
 | Home Assistant action | `button.press` | Fixed `domain.service` action |
 | Local guest port | `8922` | Port used only by the guest web server |
 | Public base URL | `https://gate.example.com` | Public HTTPS origin, without a path |
+| Success notification service | `notify.mobile_app_phone` | Optional classic `notify.*` service |
 | Default validity | `1` | Default validity in hours |
 | Default use limit | `1` | `0` means unlimited until expiry |
 
@@ -77,6 +80,11 @@ a `button.*` entity or `cover.open_cover` with a `cover.*` entity.
 The public base URL is optional. When it is empty, Gate Pass uses an automatic
 local URL. When it is configured, generated links use that URL exactly and do
 not append the local guest port.
+
+The success notification service is optional. When configured, Gate Pass sends
+a notification containing the access point and pass label after the fixed Home
+Assistant action succeeds. Notification failures never undo or consume an
+additional gate action.
 
 ## Reverse proxy
 
@@ -110,7 +118,7 @@ The integration serves its bundled card from the normal Home Assistant web
 server. In **Settings -> Dashboards -> Resources**, add:
 
 ```text
-/gate-pass/gate-pass-card.js?v=0.2.1
+/gate-pass/gate-pass-card.js?v=0.3.0-beta.1
 ```
 
 Select **JavaScript module** as the resource type. Reload the browser or app,
@@ -140,6 +148,8 @@ All Gate Pass actions require a Home Assistant administrator.
 |---|---|
 | `gate_pass.create_pass` | Create a pass and return its one-time guest URL |
 | `gate_pass.list_passes` | Return currently active passes without secrets |
+| `gate_pass.list_activity` | Return the latest persistent activity records |
+| `gate_pass.clear_activity` | Permanently clear the activity history |
 | `gate_pass.revoke_pass` | Revoke one pass by ID |
 | `gate_pass.revoke_all` | Revoke every active pass |
 
@@ -157,6 +167,10 @@ stored.
 Anyone with the complete URL can use the pass until it expires, reaches its use
 limit, or is revoked. Use HTTPS, short validity periods, one-use passes where
 possible, and avoid sharing links through systems that log or preview URLs.
+
+The activity history keeps the latest 200 records. It does not store guest URL
+secrets, IP addresses, or browser identifiers. Only Home Assistant
+administrators can read or clear it.
 
 See [SECURITY.md](SECURITY.md) for deployment guidance and vulnerability
 reporting.
@@ -180,10 +194,9 @@ contain them.
 ## Current limitations
 
 - One access point per Home Assistant installation
-- No long-term audit log UI
 - No built-in Cloudflare Access identity check
-- No notification after successful use
 - Web Share support depends on the browser or Home Assistant companion WebView
+- Activity history is limited to the latest 200 records and has no export UI
 
 ## Development
 

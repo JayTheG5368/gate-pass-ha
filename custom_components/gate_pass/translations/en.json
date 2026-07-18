@@ -12,17 +12,20 @@
           "service": "Home Assistant action (domain.service)",
           "guest_port": "Local guest port",
           "public_base_url": "Public base URL (optional)",
+          "notification_service": "Success notification service (optional)",
           "default_duration_hours": "Default validity (hours)",
           "default_max_uses": "Default use limit (0 = unlimited)"
         },
         "data_description": {
           "service": "For a button, use button.press.",
-          "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL."
+          "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL.",
+          "notification_service": "Classic Home Assistant notify service, for example notify.mobile_app_phone. Leave empty to disable."
         }
       }
     },
     "error": {
       "invalid_url": "Enter a valid HTTP or HTTPS URL.",
+      "invalid_notification_service": "Enter a notify.* service or leave the field empty.",
       "invalid_service": "The action must use the domain.service format.",
       "domain_mismatch": "The entity and action must use the same domain.",
       "invalid_config": "Check the submitted values."
@@ -41,17 +44,20 @@
           "service": "Home Assistant action (domain.service)",
           "guest_port": "Local guest port",
           "public_base_url": "Public base URL (optional)",
+          "notification_service": "Success notification service (optional)",
           "default_duration_hours": "Default validity (hours)",
           "default_max_uses": "Default use limit (0 = unlimited)"
         },
         "data_description": {
           "service": "For a button, use button.press.",
-          "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL."
+          "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL.",
+          "notification_service": "Classic Home Assistant notify service, for example notify.mobile_app_phone. Leave empty to disable."
         }
       }
     },
     "error": {
       "invalid_url": "Enter a valid HTTP or HTTPS URL.",
+      "invalid_notification_service": "Enter a notify.* service or leave the field empty.",
       "invalid_service": "The action must use the domain.service format.",
       "domain_mismatch": "The entity and action must use the same domain.",
       "invalid_config": "Check the submitted values."
@@ -83,6 +89,14 @@
     "list_passes": {
       "name": "List active passes",
       "description": "Returns all currently active passes."
+    },
+    "list_activity": {
+      "name": "List activity",
+      "description": "Returns the persistent activity history without guest secrets or network identifiers."
+    },
+    "clear_activity": {
+      "name": "Clear activity",
+      "description": "Permanently removes all stored Gate Pass activity records."
     },
     "revoke_pass": {
       "name": "Revoke pass",
