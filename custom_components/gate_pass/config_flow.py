@@ -158,6 +158,7 @@ class GatePassConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=_schema(user_input),
             errors=errors,
+            description_placeholders={"example_url": "https://gate.example.com"},
         )
 
     @staticmethod
@@ -199,5 +200,6 @@ class GatePassOptionsFlow(OptionsFlow):
             step_id="init",
             data_schema=_schema(current),
             errors=errors,
+            description_placeholders={"example_url": "https://gate.example.com"},
             last_step=True,
         )

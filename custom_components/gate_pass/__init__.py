@@ -46,6 +46,8 @@ from .pass_manager import PassManager
 from .server import GuestServer
 from .storage import HomeAssistantPassStorage
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 
 @dataclass
 class GatePassRuntime:

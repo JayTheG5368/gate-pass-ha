@@ -54,6 +54,8 @@ def test_translations_have_matching_top_level_keys() -> None:
 
     assert english.keys() == german.keys()
     assert english["services"].keys() == german["services"].keys()
+    assert "https://" not in json.dumps(english)
+    assert "https://" not in json.dumps(german)
 
 
 def test_brand_icon_dimensions() -> None:

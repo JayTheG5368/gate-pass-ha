@@ -17,7 +17,7 @@
         },
         "data_description": {
           "service": "For a button, use button.press.",
-          "public_base_url": "For example https://gate.example.com. Leave empty for an automatically generated local URL."
+          "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL."
         }
       }
     },
@@ -46,7 +46,7 @@
         },
         "data_description": {
           "service": "For a button, use button.press.",
-          "public_base_url": "For example https://gate.example.com. Leave empty for an automatically generated local URL."
+          "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL."
         }
       }
     },
