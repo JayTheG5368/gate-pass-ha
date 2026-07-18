@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          zip -r "gate-pass-ha-${version}.zip" \
+          git archive --format=zip --output="gate-pass-ha-${version}.zip" HEAD \
             custom_components/gate_pass \
             README.md LICENSE SECURITY.md CHANGELOG.md
 
