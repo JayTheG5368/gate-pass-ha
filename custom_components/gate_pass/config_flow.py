@@ -9,7 +9,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult, OptionsFlow
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
@@ -37,8 +37,46 @@ from .validation import (
     service_domain,
 )
 
+_NOTIFICATION_DISABLED = "__disabled__"
 
-def _schema(current: Mapping[str, Any] | None = None) -> vol.Schema:
+
+def _notification_service_options(
+    hass: HomeAssistant, current: Mapping[str, Any]
+) -> list[selector.SelectOptionDict]:
+    """Build notification choices from currently registered HA services."""
+    services = hass.services.async_services_for_domain("notify")
+    values = {f"notify.{service}" for service in services if service != "send_message"}
+    current_service = str(current.get(CONF_NOTIFICATION_SERVICE, "")).strip().lower()
+    if current_service and current_service != _NOTIFICATION_DISABLED:
+        values.add(current_service)
+
+    language = str(getattr(hass.config, "language", "en")).lower()
+    disabled_label = (
+        "Keine Benachrichtigung" if language.startswith("de") else "No notification"
+    )
+    options = [
+        selector.SelectOptionDict(
+            value=_NOTIFICATION_DISABLED,
+            label=disabled_label,
+        )
+    ]
+    for service in sorted(values):
+        name = service.removeprefix("notify.")
+        if name.startswith("mobile_app_"):
+            name = name.removeprefix("mobile_app_")
+        friendly_name = name.replace("_", " ").strip().title() or service
+        options.append(
+            selector.SelectOptionDict(
+                value=service,
+                label=f"{friendly_name} ({service})",
+            )
+        )
+    return options
+
+
+def _schema(
+    hass: HomeAssistant, current: Mapping[str, Any] | None = None
+) -> vol.Schema:
     """Build a frontend-serializable setup/options schema."""
     current = current or {}
     entity_default = current.get(CONF_ENTITY_ID)
@@ -78,8 +116,15 @@ def _schema(current: Mapping[str, Any] | None = None) -> vol.Schema:
             ): selector.TextSelector(),
             vol.Optional(
                 CONF_NOTIFICATION_SERVICE,
-                default=current.get(CONF_NOTIFICATION_SERVICE, ""),
-            ): selector.TextSelector(),
+                default=current.get(CONF_NOTIFICATION_SERVICE, "")
+                or _NOTIFICATION_DISABLED,
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=_notification_service_options(hass, current),
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    custom_value=True,
+                )
+            ),
             vol.Required(
                 CONF_DEFAULT_DURATION_HOURS,
                 default=current.get(
@@ -119,8 +164,11 @@ def _validate(user_input: dict[str, Any]) -> dict[str, Any]:
     result[CONF_PUBLIC_BASE_URL] = normalize_public_base_url(
         result.get(CONF_PUBLIC_BASE_URL, "")
     )
+    notification_service = result.get(CONF_NOTIFICATION_SERVICE, "")
+    if notification_service == _NOTIFICATION_DISABLED:
+        notification_service = ""
     result[CONF_NOTIFICATION_SERVICE] = normalize_notification_service(
-        result.get(CONF_NOTIFICATION_SERVICE, "")
+        notification_service
     )
     result[CONF_GUEST_PORT] = int(result[CONF_GUEST_PORT])
     result[CONF_DEFAULT_DURATION_HOURS] = float(result[CONF_DEFAULT_DURATION_HOURS])
@@ -171,7 +219,7 @@ class GatePassConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=_schema(user_input),
+            data_schema=_schema(self.hass, user_input),
             errors=errors,
             description_placeholders={"example_url": "https://gate.example.com"},
         )
@@ -215,7 +263,7 @@ class GatePassOptionsFlow(OptionsFlow):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=_schema(current),
+            data_schema=_schema(self.hass, current),
             errors=errors,
             description_placeholders={"example_url": "https://gate.example.com"},
             last_step=True,

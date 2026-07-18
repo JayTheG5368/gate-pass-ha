@@ -2,7 +2,7 @@
 
 All notable changes to Gate Pass HA are documented here.
 
-## [0.3.0-beta.1] - Unreleased local test
+## [0.3.0-beta.2] - Unreleased local test
 
 ### Added
 
@@ -10,6 +10,8 @@ All notable changes to Gate Pass HA are documented here.
   use, and revocation
 - Activity tab and confirmed history clearing in the Lovelace card
 - Optional classic `notify.*` service after a successful guest action
+- Device-friendly dropdown populated from registered `notify.*` services, with
+  a manual-entry fallback
 
 ### Security
 

@@ -64,7 +64,11 @@ def normalize_notification_service(value: Any) -> str:
     value = value.strip().lower()
     if not value:
         return ""
-    if not _SERVICE_PATTERN.fullmatch(value) or not value.startswith("notify."):
+    if (
+        not _SERVICE_PATTERN.fullmatch(value)
+        or not value.startswith("notify.")
+        or value == "notify.send_message"
+    ):
         raise vol.Invalid("invalid_notification_service")
     return value
 

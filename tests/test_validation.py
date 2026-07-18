@@ -54,7 +54,13 @@ def test_normalize_notification_service(value: str | None, expected: str) -> Non
 
 
 @pytest.mark.parametrize(
-    "value", ["mobile_app_phone", "persistent_notification.create", "notify"]
+    "value",
+    [
+        "mobile_app_phone",
+        "persistent_notification.create",
+        "notify",
+        "notify.send_message",
+    ],
 )
 def test_reject_invalid_notification_service(value: str) -> None:
     with pytest.raises(vol.Invalid, match="invalid_notification_service"):

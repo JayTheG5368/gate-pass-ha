@@ -70,7 +70,7 @@ Open **Settings -> Devices & services -> Add integration**, search for
 | Home Assistant action | `button.press` | Fixed `domain.service` action |
 | Local guest port | `8922` | Port used only by the guest web server |
 | Public base URL | `https://gate.example.com` | Public HTTPS origin, without a path |
-| Success notification service | `notify.mobile_app_phone` | Optional classic `notify.*` service |
+| Success notification device | `Phone (notify.mobile_app_phone)` | Optional dropdown of registered `notify.*` services |
 | Default validity | `1` | Default validity in hours |
 | Default use limit | `1` | `0` means unlimited until expiry |
 
@@ -81,7 +81,9 @@ The public base URL is optional. When it is empty, Gate Pass uses an automatic
 local URL. When it is configured, generated links use that URL exactly and do
 not append the local guest port.
 
-The success notification service is optional. When configured, Gate Pass sends
+The success notification device is optional. The dropdown lists the currently
+registered device-specific `notify.*` services and still accepts a manual
+service name as a fallback. When configured, Gate Pass sends
 a notification containing the access point and pass label after the fixed Home
 Assistant action succeeds. Notification failures never undo or consume an
 additional gate action.
@@ -118,7 +120,7 @@ The integration serves its bundled card from the normal Home Assistant web
 server. In **Settings -> Dashboards -> Resources**, add:
 
 ```text
-/gate-pass/gate-pass-card.js?v=0.3.0-beta.1
+/gate-pass/gate-pass-card.js?v=0.3.0-beta.2
 ```
 
 Select **JavaScript module** as the resource type. Reload the browser or app,

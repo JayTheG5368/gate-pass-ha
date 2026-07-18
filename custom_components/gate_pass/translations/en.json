@@ -12,14 +12,14 @@
           "service": "Home Assistant action (domain.service)",
           "guest_port": "Local guest port",
           "public_base_url": "Public base URL (optional)",
-          "notification_service": "Success notification service (optional)",
+          "notification_service": "Success notification device (optional)",
           "default_duration_hours": "Default validity (hours)",
           "default_max_uses": "Default use limit (0 = unlimited)"
         },
         "data_description": {
           "service": "For a button, use button.press.",
           "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL.",
-          "notification_service": "Classic Home Assistant notify service, for example notify.mobile_app_phone. Leave empty to disable."
+          "notification_service": "Select your device notification service. Unlisted notify.* services can still be entered manually."
         }
       }
     },
@@ -44,14 +44,14 @@
           "service": "Home Assistant action (domain.service)",
           "guest_port": "Local guest port",
           "public_base_url": "Public base URL (optional)",
-          "notification_service": "Success notification service (optional)",
+          "notification_service": "Success notification device (optional)",
           "default_duration_hours": "Default validity (hours)",
           "default_max_uses": "Default use limit (0 = unlimited)"
         },
         "data_description": {
           "service": "For a button, use button.press.",
           "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL.",
-          "notification_service": "Classic Home Assistant notify service, for example notify.mobile_app_phone. Leave empty to disable."
+          "notification_service": "Select your device notification service. Unlisted notify.* services can still be entered manually."
         }
       }
     },

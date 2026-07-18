@@ -12,14 +12,14 @@
           "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
-          "notification_service": "Dienst für Erfolgsbenachrichtigung (optional)",
+          "notification_service": "Gerät für Erfolgsbenachrichtigung (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
           "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
         },
         "data_description": {
           "service": "Für einen Button beispielsweise button.press.",
           "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
-          "notification_service": "Klassischer Home-Assistant-Dienst, beispielsweise notify.mobile_app_phone. Leer lassen zum Deaktivieren."
+          "notification_service": "Wähle den Benachrichtigungsdienst deines Geräts. Nicht aufgeführte notify.*-Dienste können weiterhin manuell eingetragen werden."
         }
       }
     },
@@ -44,14 +44,14 @@
           "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
-          "notification_service": "Dienst für Erfolgsbenachrichtigung (optional)",
+          "notification_service": "Gerät für Erfolgsbenachrichtigung (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
           "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
         },
         "data_description": {
           "service": "Für einen Button beispielsweise button.press.",
           "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
-          "notification_service": "Klassischer Home-Assistant-Dienst, beispielsweise notify.mobile_app_phone. Leer lassen zum Deaktivieren."
+          "notification_service": "Wähle den Benachrichtigungsdienst deines Geräts. Nicht aufgeführte notify.*-Dienste können weiterhin manuell eingetragen werden."
         }
       }
     },
