@@ -1,0 +1,102 @@
+{
+  "title": "Gate Pass HA",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Gate Pass einrichten",
+        "description": "Konfiguriere genau eine Home-Assistant-Aktion für zeitlich begrenzte Gastzugänge.",
+        "data": {
+          "access_name": "Name des Zugangs",
+          "action_label": "Beschriftung der Gast-Schaltfläche",
+          "entity_id": "Ziel-Entity",
+          "service": "Home-Assistant-Aktion (domain.service)",
+          "guest_port": "Lokaler Gast-Port",
+          "public_base_url": "Öffentliche Basis-URL (optional)",
+          "default_duration_hours": "Standard-Gültigkeit (Stunden)",
+          "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
+        },
+        "data_description": {
+          "service": "Für einen Button beispielsweise button.press.",
+          "public_base_url": "Beispielsweise https://gate.example.com. Leer lassen für eine automatisch erzeugte lokale URL."
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Gib eine gueltige HTTP- oder HTTPS-URL ein.",
+      "invalid_service": "Die Aktion muss das Format domain.service haben.",
+      "domain_mismatch": "Entity und Aktion muessen dieselbe Domain verwenden.",
+      "invalid_config": "Pruefe die eingegebenen Werte."
+    },
+    "abort": {"single_instance_allowed": "Gate Pass kann nur einmal eingerichtet werden."}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gate Pass konfigurieren",
+        "description": "Aenderungen starten den Gast-Webserver neu.",
+        "data": {
+          "access_name": "Name des Zugangs",
+          "action_label": "Beschriftung der Gast-Schaltfläche",
+          "entity_id": "Ziel-Entity",
+          "service": "Home-Assistant-Aktion (domain.service)",
+          "guest_port": "Lokaler Gast-Port",
+          "public_base_url": "Öffentliche Basis-URL (optional)",
+          "default_duration_hours": "Standard-Gültigkeit (Stunden)",
+          "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
+        },
+        "data_description": {
+          "service": "Für einen Button beispielsweise button.press.",
+          "public_base_url": "Beispielsweise https://gate.example.com. Leer lassen für eine automatisch erzeugte lokale URL."
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Gib eine gueltige HTTP- oder HTTPS-URL ein.",
+      "invalid_service": "Die Aktion muss das Format domain.service haben.",
+      "domain_mismatch": "Entity und Aktion muessen dieselbe Domain verwenden.",
+      "invalid_config": "Pruefe die eingegebenen Werte."
+    }
+  },
+  "services": {
+    "create_pass": {
+      "name": "Zugang erstellen",
+      "description": "Erstellt einen zeitlich und optional nach Nutzungen begrenzten Zugangslink.",
+      "fields": {
+        "label": {
+          "name": "Bezeichnung",
+          "description": "Name des Gastes oder Zweck des Zugangs."
+        },
+        "duration_hours": {
+          "name": "Gültigkeit",
+          "description": "Gültigkeitsdauer in Stunden."
+        },
+        "max_uses": {
+          "name": "Maximale Nutzungen",
+          "description": "0 erlaubt unbegrenzt viele Nutzungen bis zum Ablauf."
+        },
+        "valid_from": {
+          "name": "Gültig ab",
+          "description": "Optionaler Zeitpunkt, ab dem der Link verwendet werden kann."
+        }
+      }
+    },
+    "list_passes": {
+      "name": "Aktive Zugänge auflisten",
+      "description": "Gibt alle derzeit aktiven Zugänge zurück."
+    },
+    "revoke_pass": {
+      "name": "Zugang widerrufen",
+      "description": "Sperrt einen einzelnen Zugang sofort.",
+      "fields": {
+        "pass_id": {
+          "name": "Zugangs-ID",
+          "description": "ID des zu widerrufenden Zugangs."
+        }
+      }
+    },
+    "revoke_all": {
+      "name": "Alle Zugänge widerrufen",
+      "description": "Sperrt alle aktiven Zugänge sofort."
+    }
+  }
+}

@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements-dev.txt
+          npm ci
+
+      - name: Verify release version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          manifest_version="$(python -c 'import json; print(json.load(open("custom_components/gate_pass/manifest.json"))["version"])')"
+          package_version="$(node -p 'require("./package.json").version')"
+          test "$version" = "$manifest_version"
+          test "$version" = "$package_version"
+
+      - name: Run release checks
+        run: |
+          python -m pytest tests -q
+          python -m ruff check custom_components tests scripts
+          npm run lint
+          npm run build
+          git diff --exit-code -- custom_components/gate_pass/frontend/gate-pass-card.js
+
+      - name: Build manual installation archive
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          zip -r "gate-pass-ha-${version}.zip" \
+            custom_components/gate_pass \
+            README.md LICENSE SECURITY.md CHANGELOG.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          "gate-pass-ha-${GITHUB_REF_NAME#v}.zip"
+          --verify-tag
+          --generate-notes
+          --title "${GITHUB_REF_NAME}"

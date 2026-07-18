@@ -1,0 +1,13 @@
+.venv/
+node_modules/
+.npm-cache/
+.pip-cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+coverage.xml
+.coverage
+*.zip
+.DS_Store
+*.log

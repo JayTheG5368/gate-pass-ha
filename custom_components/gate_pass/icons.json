@@ -1,0 +1,9 @@
+{
+  "services": {
+    "create_pass": {"service": "mdi:ticket-confirmation-outline"},
+    "list_passes": {"service": "mdi:format-list-bulleted"},
+    "revoke_pass": {"service": "mdi:ticket-off-outline"},
+    "revoke_all": {"service": "mdi:delete-alert-outline"}
+  }
+}
+

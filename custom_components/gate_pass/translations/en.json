@@ -1,0 +1,102 @@
+{
+  "title": "Gate Pass HA",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Gate Pass",
+        "description": "Configure exactly one Home Assistant action for temporary guest access.",
+        "data": {
+          "access_name": "Access point name",
+          "action_label": "Guest action label",
+          "entity_id": "Target entity",
+          "service": "Home Assistant action (domain.service)",
+          "guest_port": "Local guest port",
+          "public_base_url": "Public base URL (optional)",
+          "default_duration_hours": "Default validity (hours)",
+          "default_max_uses": "Default use limit (0 = unlimited)"
+        },
+        "data_description": {
+          "service": "For a button, use button.press.",
+          "public_base_url": "For example https://gate.example.com. Leave empty for an automatically generated local URL."
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Enter a valid HTTP or HTTPS URL.",
+      "invalid_service": "The action must use the domain.service format.",
+      "domain_mismatch": "The entity and action must use the same domain.",
+      "invalid_config": "Check the submitted values."
+    },
+    "abort": {"single_instance_allowed": "Gate Pass can only be configured once."}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure Gate Pass",
+        "description": "Changes restart the guest web server.",
+        "data": {
+          "access_name": "Access point name",
+          "action_label": "Guest action label",
+          "entity_id": "Target entity",
+          "service": "Home Assistant action (domain.service)",
+          "guest_port": "Local guest port",
+          "public_base_url": "Public base URL (optional)",
+          "default_duration_hours": "Default validity (hours)",
+          "default_max_uses": "Default use limit (0 = unlimited)"
+        },
+        "data_description": {
+          "service": "For a button, use button.press.",
+          "public_base_url": "For example https://gate.example.com. Leave empty for an automatically generated local URL."
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Enter a valid HTTP or HTTPS URL.",
+      "invalid_service": "The action must use the domain.service format.",
+      "domain_mismatch": "The entity and action must use the same domain.",
+      "invalid_config": "Check the submitted values."
+    }
+  },
+  "services": {
+    "create_pass": {
+      "name": "Create pass",
+      "description": "Creates a temporary guest link with an optional use limit.",
+      "fields": {
+        "label": {
+          "name": "Label",
+          "description": "Name of the guest or purpose of the pass."
+        },
+        "duration_hours": {
+          "name": "Validity",
+          "description": "Number of hours for which the pass remains valid."
+        },
+        "max_uses": {
+          "name": "Maximum uses",
+          "description": "Maximum number of uses. Set to 0 for unlimited uses until expiry."
+        },
+        "valid_from": {
+          "name": "Valid from",
+          "description": "Optional date and time from which the pass can be used."
+        }
+      }
+    },
+    "list_passes": {
+      "name": "List active passes",
+      "description": "Returns all currently active passes."
+    },
+    "revoke_pass": {
+      "name": "Revoke pass",
+      "description": "Immediately revokes one pass.",
+      "fields": {
+        "pass_id": {
+          "name": "Pass ID",
+          "description": "ID of the pass to revoke."
+        }
+      }
+    },
+    "revoke_all": {
+      "name": "Revoke all passes",
+      "description": "Immediately revokes all active passes."
+    }
+  }
+}
