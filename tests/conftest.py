@@ -11,3 +11,25 @@ component_path = Path(__file__).parents[1] / "custom_components" / "gate_pass"
 package = ModuleType("custom_components.gate_pass")
 package.__path__ = [str(component_path)]
 sys.modules["custom_components.gate_pass"] = package
+
+# Lightweight Home Assistant import stubs for adapter and URL unit tests. The
+# real integration wiring is exercised on the target Home Assistant instance.
+homeassistant = ModuleType("homeassistant")
+homeassistant.__path__ = []
+homeassistant_core = ModuleType("homeassistant.core")
+homeassistant_core.HomeAssistant = object
+homeassistant_helpers = ModuleType("homeassistant.helpers")
+homeassistant_helpers.__path__ = []
+homeassistant_storage = ModuleType("homeassistant.helpers.storage")
+homeassistant_storage.Store = object
+sys.modules.setdefault("homeassistant", homeassistant)
+sys.modules.setdefault("homeassistant.core", homeassistant_core)
+sys.modules.setdefault("homeassistant.helpers", homeassistant_helpers)
+sys.modules.setdefault("homeassistant.helpers.storage", homeassistant_storage)
+
+aiohttp = ModuleType("aiohttp")
+aiohttp.__path__ = []
+aiohttp_web = ModuleType("aiohttp.web")
+aiohttp.web = aiohttp_web
+sys.modules.setdefault("aiohttp", aiohttp)
+sys.modules.setdefault("aiohttp.web", aiohttp_web)

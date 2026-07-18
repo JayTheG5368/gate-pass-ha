@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,7 @@ from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
+    ATTR_CONFIG_ENTRY_ID,
     ATTR_DURATION_HOURS,
     ATTR_LABEL,
     ATTR_MAX_USES,
@@ -30,21 +33,31 @@ from .const import (
     ATTR_VALID_FROM,
     CARD_URL,
     CONF_ACCESS_NAME,
+    CONF_ACTION_LABEL,
     CONF_DEFAULT_DURATION_HOURS,
     CONF_DEFAULT_MAX_USES,
+    CONF_GUEST_PORT,
+    CONF_PUBLIC_BASE_URL,
+    DATA_RUNTIMES,
+    DATA_SERVERS,
     DEFAULT_DURATION_HOURS,
     DEFAULT_MAX_USES,
     DOMAIN,
     EVENT_ACTIVITY_CLEARED,
     EVENT_PASS_CREATED,
     EVENT_PASS_REVOKED,
+    PLATFORMS,
     SERVICE_CLEAR_ACTIVITY,
     SERVICE_CREATE_PASS,
+    SERVICE_EXPORT_ACTIVITY,
+    SERVICE_LIST_ACCESS_POINTS,
     SERVICE_LIST_ACTIVITY,
     SERVICE_LIST_PASSES,
     SERVICE_REVOKE_ALL,
     SERVICE_REVOKE_PASS,
 )
+from .csv_export import csv_safe_activity
+from .notifications import async_send_notification
 from .pass_manager import PassManager
 from .server import GuestServer
 from .storage import HomeAssistantPassStorage
@@ -54,16 +67,20 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 @dataclass
 class GatePassRuntime:
-    """Runtime data for the single Gate Pass config entry."""
+    """Runtime data for one configured access point."""
 
+    entry_id: str
     config: dict[str, Any]
     manager: PassManager
     server: GuestServer
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the card resource and integration services."""
-    hass.data.setdefault(DOMAIN, {})
+    """Register the card resource and administrator-only services."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    domain_data.setdefault(DATA_RUNTIMES, {})
+    domain_data.setdefault(DATA_SERVERS, {})
+
     frontend_path = Path(__file__).parent / "frontend" / "gate-pass-card.js"
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_URL, str(frontend_path), False)]
@@ -72,8 +89,26 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     if hass.services.has_service(DOMAIN, SERVICE_CREATE_PASS):
         return True
 
+    async def async_list_access_points(_call: ServiceCall) -> ServiceResponse:
+        runtimes = _runtimes(hass)
+        return {
+            "access_points": [
+                {
+                    "config_entry_id": runtime.entry_id,
+                    "access_name": runtime.config[CONF_ACCESS_NAME],
+                    "action_label": runtime.config[CONF_ACTION_LABEL],
+                    "guest_port": runtime.config[CONF_GUEST_PORT],
+                    "public_base_url": runtime.config.get(CONF_PUBLIC_BASE_URL, ""),
+                }
+                for runtime in sorted(
+                    runtimes.values(),
+                    key=lambda item: str(item.config[CONF_ACCESS_NAME]).casefold(),
+                )
+            ]
+        }
+
     async def async_create_pass(call: ServiceCall) -> ServiceResponse:
-        runtime = _get_runtime(hass)
+        runtime = _get_runtime(hass, call)
         duration = float(
             call.data.get(
                 ATTR_DURATION_HOURS,
@@ -92,12 +127,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             max_uses=max_uses,
             valid_from=call.data.get(ATTR_VALID_FROM),
         )
-        guest_url = runtime.server.build_guest_url(guest_pass["pass_id"], secret)
-        hass.bus.async_fire(
-            EVENT_PASS_CREATED,
-            {"pass_id": guest_pass["pass_id"], "label": guest_pass["label"]},
+        guest_url = runtime.server.build_guest_url(
+            runtime.entry_id, guest_pass["pass_id"], secret
+        )
+        event_data = _event_data(runtime, pass_id=guest_pass["pass_id"])
+        event_data["label"] = guest_pass["label"]
+        hass.bus.async_fire(EVENT_PASS_CREATED, event_data)
+        await async_send_notification(
+            hass, runtime.config, "created", label=guest_pass["label"]
         )
         response = {
+            "config_entry_id": runtime.entry_id,
+            "access_name": runtime.config[CONF_ACCESS_NAME],
             "pass_id": guest_pass["pass_id"],
             "label": guest_pass["label"],
             "guest_url": guest_url,
@@ -108,43 +149,89 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         return response if call.return_response else None
 
     async def async_list_passes(call: ServiceCall) -> ServiceResponse:
-        runtime = _get_runtime(hass)
+        runtime = _get_runtime(hass, call)
         return {
+            "config_entry_id": runtime.entry_id,
             "access_name": runtime.config[CONF_ACCESS_NAME],
             "passes": await runtime.manager.async_list_active(),
         }
 
     async def async_list_activity(call: ServiceCall) -> ServiceResponse:
-        runtime = _get_runtime(hass)
+        runtime = _get_runtime(hass, call)
         return {
+            "config_entry_id": runtime.entry_id,
             "access_name": runtime.config[CONF_ACCESS_NAME],
             "activity": await runtime.manager.async_list_activity(),
         }
 
+    async def async_export_activity(call: ServiceCall) -> ServiceResponse:
+        runtime = _get_runtime(hass, call)
+        output = StringIO(newline="")
+        fieldnames = (
+            "event_type",
+            "occurred_at",
+            "label",
+            "pass_id",
+            "use_count",
+            "max_uses",
+        )
+        writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(
+            csv_safe_activity(item)
+            for item in await runtime.manager.async_list_activity()
+        )
+        return {
+            "filename": f"gate-pass-activity-{runtime.entry_id[:8]}.csv",
+            "content_type": "text/csv;charset=utf-8",
+            "csv": output.getvalue(),
+        }
+
     async def async_clear_activity(call: ServiceCall) -> ServiceResponse:
-        runtime = _get_runtime(hass)
+        runtime = _get_runtime(hass, call)
         count = await runtime.manager.async_clear_activity()
-        hass.bus.async_fire(EVENT_ACTIVITY_CLEARED, {"count": count})
+        event_data = _event_data(runtime, count=count)
+        hass.bus.async_fire(EVENT_ACTIVITY_CLEARED, event_data)
         response = {"success": True, "count": count}
         return response if call.return_response else None
 
     async def async_revoke_pass(call: ServiceCall) -> ServiceResponse:
-        runtime = _get_runtime(hass)
+        runtime = _get_runtime(hass, call)
         pass_id = str(call.data[ATTR_PASS_ID])
+        active_passes = await runtime.manager.async_list_active()
+        label = next(
+            (item["label"] for item in active_passes if item["pass_id"] == pass_id),
+            pass_id,
+        )
         revoked = await runtime.manager.async_revoke(pass_id)
         if not revoked:
             raise ServiceValidationError("Pass not found")
-        hass.bus.async_fire(EVENT_PASS_REVOKED, {"pass_id": pass_id})
+        event_data = _event_data(runtime, pass_id=pass_id)
+        event_data["label"] = label
+        hass.bus.async_fire(EVENT_PASS_REVOKED, event_data)
+        await async_send_notification(hass, runtime.config, "revoked", label=str(label))
         response = {"success": True}
         return response if call.return_response else None
 
     async def async_revoke_all(call: ServiceCall) -> ServiceResponse:
-        runtime = _get_runtime(hass)
+        runtime = _get_runtime(hass, call)
         count = await runtime.manager.async_revoke_all()
-        hass.bus.async_fire(EVENT_PASS_REVOKED, {"all": True, "count": count})
+        event_data = _event_data(runtime, all=True, count=count)
+        hass.bus.async_fire(EVENT_PASS_REVOKED, event_data)
+        if count:
+            await async_send_notification(hass, runtime.config, "revoked", count=count)
         response = {"success": True, "count": count}
         return response if call.return_response else None
 
+    runtime_field = {vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string}
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_LIST_ACCESS_POINTS,
+        async_list_access_points,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.ONLY,
+    )
     async_register_admin_service(
         hass,
         DOMAIN,
@@ -152,6 +239,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         async_create_pass,
         schema=vol.Schema(
             {
+                **runtime_field,
                 vol.Optional(ATTR_LABEL): vol.All(cv.string, vol.Length(max=80)),
                 vol.Optional(ATTR_DURATION_HOURS): vol.All(
                     vol.Coerce(float), vol.Range(min=0.1, max=720)
@@ -164,28 +252,25 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ),
         supports_response=SupportsResponse.OPTIONAL,
     )
-    async_register_admin_service(
-        hass,
-        DOMAIN,
-        SERVICE_LIST_PASSES,
-        async_list_passes,
-        schema=vol.Schema({}),
-        supports_response=SupportsResponse.ONLY,
-    )
-    async_register_admin_service(
-        hass,
-        DOMAIN,
-        SERVICE_LIST_ACTIVITY,
-        async_list_activity,
-        schema=vol.Schema({}),
-        supports_response=SupportsResponse.ONLY,
-    )
+    for service, handler in (
+        (SERVICE_LIST_PASSES, async_list_passes),
+        (SERVICE_LIST_ACTIVITY, async_list_activity),
+        (SERVICE_EXPORT_ACTIVITY, async_export_activity),
+    ):
+        async_register_admin_service(
+            hass,
+            DOMAIN,
+            service,
+            handler,
+            schema=vol.Schema(runtime_field),
+            supports_response=SupportsResponse.ONLY,
+        )
     async_register_admin_service(
         hass,
         DOMAIN,
         SERVICE_CLEAR_ACTIVITY,
         async_clear_activity,
-        schema=vol.Schema({}),
+        schema=vol.Schema(runtime_field),
         supports_response=SupportsResponse.OPTIONAL,
     )
     async_register_admin_service(
@@ -193,7 +278,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         DOMAIN,
         SERVICE_REVOKE_PASS,
         async_revoke_pass,
-        schema=vol.Schema({vol.Required(ATTR_PASS_ID): cv.string}),
+        schema=vol.Schema({**runtime_field, vol.Required(ATTR_PASS_ID): cv.string}),
         supports_response=SupportsResponse.OPTIONAL,
     )
     async_register_admin_service(
@@ -201,28 +286,56 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         DOMAIN,
         SERVICE_REVOKE_ALL,
         async_revoke_all,
-        schema=vol.Schema({}),
+        schema=vol.Schema(runtime_field),
         supports_response=SupportsResponse.OPTIONAL,
     )
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Gate Pass from a config entry."""
+    """Set up one Gate Pass access point."""
+    domain_data = hass.data[DOMAIN]
+    runtimes: dict[str, GatePassRuntime] = domain_data[DATA_RUNTIMES]
+    servers: dict[int, GuestServer] = domain_data[DATA_SERVERS]
     merged_config = {**entry.data, **entry.options}
-    manager = PassManager(HomeAssistantPassStorage(hass))
-    await manager.async_load()
-    server = GuestServer(hass, manager, merged_config)
-    try:
-        await server.async_start()
-    except OSError as err:
-        await server.async_stop()
-        raise ConfigEntryNotReady(
-            f"Could not bind Gate Pass guest port: {err}"
-        ) from err
 
-    runtime = GatePassRuntime(merged_config, manager, server)
-    hass.data[DOMAIN][entry.entry_id] = runtime
+    entries = hass.config_entries.async_entries(DOMAIN)
+    legacy_owner = bool(entries and entries[0].entry_id == entry.entry_id)
+    manager = PassManager(
+        HomeAssistantPassStorage(hass, entry.entry_id, migrate_legacy=legacy_owner)
+    )
+    await manager.async_load()
+
+    port = int(merged_config[CONF_GUEST_PORT])
+    server = servers.get(port)
+    created_server = server is None
+    if server is None:
+        server = GuestServer(hass, port)
+        servers[port] = server
+    server.register(entry.entry_id, manager, merged_config, legacy=legacy_owner)
+    if created_server:
+        try:
+            await server.async_start()
+        except OSError as err:
+            server.unregister(entry.entry_id)
+            servers.pop(port, None)
+            await server.async_stop()
+            raise ConfigEntryNotReady(
+                f"Could not bind Gate Pass guest port: {err}"
+            ) from err
+
+    runtime = GatePassRuntime(entry.entry_id, merged_config, manager, server)
+    runtimes[entry.entry_id] = runtime
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except Exception:
+        runtimes.pop(entry.entry_id, None)
+        server.unregister(entry.entry_id)
+        if server.empty:
+            servers.pop(port, None)
+            await server.async_stop()
+        raise
+
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     async def _on_stop(_event: Any) -> None:
@@ -235,22 +348,63 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload Gate Pass and release the guest port."""
-    runtime: GatePassRuntime | None = hass.data.get(DOMAIN, {}).pop(
-        entry.entry_id, None
-    )
-    if runtime is not None:
+    """Unload one access point and release an unused guest port."""
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
+
+    domain_data = hass.data.get(DOMAIN, {})
+    runtime = domain_data.get(DATA_RUNTIMES, {}).pop(entry.entry_id, None)
+    if not isinstance(runtime, GatePassRuntime):
+        return True
+
+    runtime.server.unregister(entry.entry_id)
+    if runtime.server.empty:
+        port = int(runtime.config[CONF_GUEST_PORT])
+        domain_data.get(DATA_SERVERS, {}).pop(port, None)
         await runtime.server.async_stop()
     return True
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload Gate Pass when options change."""
+    """Reload one access point when its options change."""
+    access_name = str(entry.options.get(CONF_ACCESS_NAME, entry.data[CONF_ACCESS_NAME]))
+    if entry.title != access_name:
+        hass.config_entries.async_update_entry(entry, title=access_name)
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-def _get_runtime(hass: HomeAssistant) -> GatePassRuntime:
-    runtimes = list(hass.data.get(DOMAIN, {}).values())
-    if len(runtimes) != 1 or not isinstance(runtimes[0], GatePassRuntime):
+def get_runtime(hass: HomeAssistant, entry_id: str) -> GatePassRuntime:
+    """Return one loaded runtime for platform setup."""
+    runtime = _runtimes(hass).get(entry_id)
+    if not isinstance(runtime, GatePassRuntime):
+        raise ConfigEntryNotReady("Gate Pass access point is not loaded")
+    return runtime
+
+
+def _runtimes(hass: HomeAssistant) -> dict[str, GatePassRuntime]:
+    return hass.data.get(DOMAIN, {}).get(DATA_RUNTIMES, {})
+
+
+def _get_runtime(hass: HomeAssistant, call: ServiceCall) -> GatePassRuntime:
+    runtimes = _runtimes(hass)
+    entry_id = str(call.data.get(ATTR_CONFIG_ENTRY_ID, "")).strip()
+    if entry_id:
+        runtime = runtimes.get(entry_id)
+        if isinstance(runtime, GatePassRuntime):
+            return runtime
+        raise ServiceValidationError("Selected Gate Pass access point is not loaded")
+    if len(runtimes) == 1:
+        return next(iter(runtimes.values()))
+    if not runtimes:
         raise ServiceValidationError("Gate Pass is not configured or loaded")
-    return runtimes[0]
+    raise ServiceValidationError(
+        "Multiple Gate Pass access points are loaded; select config_entry_id"
+    )
+
+
+def _event_data(runtime: GatePassRuntime, **data: Any) -> dict[str, Any]:
+    return {
+        "config_entry_id": runtime.entry_id,
+        "access_name": runtime.config[CONF_ACCESS_NAME],
+        **data,
+    }

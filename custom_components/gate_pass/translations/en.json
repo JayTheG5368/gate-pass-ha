@@ -3,8 +3,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set up Gate Pass",
-        "description": "Configure exactly one Home Assistant action for temporary guest access.",
+        "title": "Add a Gate Pass access point",
+        "description": "Configure one Home Assistant action. Add the integration again for additional access points.",
         "data": {
           "access_name": "Access point name",
           "action_label": "Guest action label",
@@ -12,31 +12,34 @@
           "service": "Home Assistant action (domain.service)",
           "guest_port": "Local guest port",
           "public_base_url": "Public base URL (optional)",
-          "notification_service": "Success notification device (optional)",
+          "notification_service": "Notification device (optional)",
+          "notification_events": "Notification events (optional)",
           "default_duration_hours": "Default validity (hours)",
           "default_max_uses": "Default use limit (0 = unlimited)"
         },
         "data_description": {
           "service": "For a button, use button.press.",
+          "guest_port": "Access points may share one port and public URL, or use separate ports and URLs.",
           "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL.",
-          "notification_service": "Select your device notification service. Unlisted notify.* services can still be entered manually."
+          "notification_service": "Select a device service. Unlisted classic notify.* services can be entered manually.",
+          "notification_events": "Choose which pass lifecycle events should notify you."
         }
       }
     },
     "error": {
       "invalid_url": "Enter a valid HTTP or HTTPS URL.",
       "invalid_notification_service": "Enter a notify.* service or leave the field empty.",
+      "invalid_notification_events": "Select only supported notification events.",
       "invalid_service": "The action must use the domain.service format.",
       "domain_mismatch": "The entity and action must use the same domain.",
       "invalid_config": "Check the submitted values."
-    },
-    "abort": {"single_instance_allowed": "Gate Pass can only be configured once."}
+    }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Configure Gate Pass",
-        "description": "Changes restart the guest web server.",
+        "title": "Configure access point",
+        "description": "Changes reload this access point. Other access points remain available.",
         "data": {
           "access_name": "Access point name",
           "action_label": "Guest action label",
@@ -44,73 +47,77 @@
           "service": "Home Assistant action (domain.service)",
           "guest_port": "Local guest port",
           "public_base_url": "Public base URL (optional)",
-          "notification_service": "Success notification device (optional)",
+          "notification_service": "Notification device (optional)",
+          "notification_events": "Notification events (optional)",
           "default_duration_hours": "Default validity (hours)",
           "default_max_uses": "Default use limit (0 = unlimited)"
         },
         "data_description": {
           "service": "For a button, use button.press.",
+          "guest_port": "Access points may share one port and public URL, or use separate ports and URLs.",
           "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL.",
-          "notification_service": "Select your device notification service. Unlisted notify.* services can still be entered manually."
+          "notification_service": "Select a device service. Unlisted classic notify.* services can be entered manually.",
+          "notification_events": "Choose which pass lifecycle events should notify you."
         }
       }
     },
     "error": {
       "invalid_url": "Enter a valid HTTP or HTTPS URL.",
       "invalid_notification_service": "Enter a notify.* service or leave the field empty.",
+      "invalid_notification_events": "Select only supported notification events.",
       "invalid_service": "The action must use the domain.service format.",
       "domain_mismatch": "The entity and action must use the same domain.",
       "invalid_config": "Check the submitted values."
     }
   },
   "services": {
+    "list_access_points": {
+      "name": "List access points",
+      "description": "Returns all loaded Gate Pass access points for cards and automations."
+    },
     "create_pass": {
       "name": "Create pass",
       "description": "Creates a temporary guest link with an optional use limit.",
       "fields": {
-        "label": {
-          "name": "Label",
-          "description": "Name of the guest or purpose of the pass."
-        },
-        "duration_hours": {
-          "name": "Validity",
-          "description": "Number of hours for which the pass remains valid."
-        },
-        "max_uses": {
-          "name": "Maximum uses",
-          "description": "Maximum number of uses. Set to 0 for unlimited uses until expiry."
-        },
-        "valid_from": {
-          "name": "Valid from",
-          "description": "Optional date and time from which the pass can be used."
-        }
+        "config_entry_id": {"name": "Access point", "description": "Target access point. Optional when only one is configured."},
+        "label": {"name": "Label", "description": "Name of the guest or purpose of the pass."},
+        "duration_hours": {"name": "Validity", "description": "Number of hours for which the pass remains valid."},
+        "max_uses": {"name": "Maximum uses", "description": "Set to 0 for unlimited uses until expiry."},
+        "valid_from": {"name": "Valid from", "description": "Optional date and time from which the pass can be used."}
       }
     },
     "list_passes": {
       "name": "List active passes",
-      "description": "Returns all currently active passes."
+      "description": "Returns all currently active passes.",
+      "fields": {"config_entry_id": {"name": "Access point", "description": "Target access point."}}
     },
     "list_activity": {
       "name": "List activity",
-      "description": "Returns the persistent activity history without guest secrets or network identifiers."
+      "description": "Returns the persistent activity history without guest secrets or network identifiers.",
+      "fields": {"config_entry_id": {"name": "Access point", "description": "Target access point."}}
+    },
+    "export_activity": {
+      "name": "Export activity",
+      "description": "Returns the selected access point activity as a privacy-conscious CSV file.",
+      "fields": {"config_entry_id": {"name": "Access point", "description": "Target access point."}}
     },
     "clear_activity": {
       "name": "Clear activity",
-      "description": "Permanently removes all stored Gate Pass activity records."
+      "description": "Permanently removes all stored Gate Pass activity records.",
+      "fields": {"config_entry_id": {"name": "Access point", "description": "Target access point."}}
     },
     "revoke_pass": {
       "name": "Revoke pass",
       "description": "Immediately revokes one pass.",
       "fields": {
-        "pass_id": {
-          "name": "Pass ID",
-          "description": "ID of the pass to revoke."
-        }
+        "config_entry_id": {"name": "Access point", "description": "Target access point."},
+        "pass_id": {"name": "Pass ID", "description": "ID of the pass to revoke."}
       }
     },
     "revoke_all": {
       "name": "Revoke all passes",
-      "description": "Immediately revokes all active passes."
+      "description": "Immediately revokes all active passes for one access point.",
+      "fields": {"config_entry_id": {"name": "Access point", "description": "Target access point."}}
     }
   }
 }

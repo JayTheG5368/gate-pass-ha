@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -14,12 +15,11 @@ from .const import (
     CONF_ACCESS_NAME,
     CONF_ACTION_LABEL,
     CONF_ENTITY_ID,
-    CONF_GUEST_PORT,
-    CONF_NOTIFICATION_SERVICE,
     CONF_PUBLIC_BASE_URL,
     CONF_SERVICE,
     EVENT_PASS_USED,
 )
+from .notifications import async_send_notification
 from .pass_manager import PassBusyError, PassManager, PassUnavailableError
 
 _LOGGER = logging.getLogger(__name__)
@@ -145,9 +145,12 @@ GUEST_PAGE_HTML = """<!doctype html>
   applySystemTheme();
 
   const parts = location.pathname.split('/').filter(Boolean);
-  const passId = parts[2];
-  const secret = parts[3];
-  const api = '/gate-pass/api/' + encodeURIComponent(passId) + '/' + encodeURIComponent(secret);
+  const scoped = parts.length >= 5;
+  const entryId = scoped ? parts[2] : null;
+  const passId = scoped ? parts[3] : parts[2];
+  const secret = scoped ? parts[4] : parts[3];
+  const api = '/gate-pass/api/' + (entryId ? encodeURIComponent(entryId) + '/' : '')
+    + encodeURIComponent(passId) + '/' + encodeURIComponent(secret);
   const button = document.getElementById('openButton');
   const dialog = document.getElementById('confirmDialog');
   const status = document.getElementById('status');
@@ -218,25 +221,64 @@ GUEST_PAGE_HTML = """<!doctype html>
 INVALID_PAGE_HTML = """<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gate Pass</title></head><body><main><h1>Zugang nicht verfügbar</h1><p>Der Link ist ungültig, abgelaufen oder bereits verwendet.</p></main></body></html>"""
 
 
-class GuestServer:
-    """Serve the public pass page and execute one fixed HA action."""
+@dataclass
+class GuestAccessPoint:
+    """One action and pass store exposed by a shared guest server."""
 
-    def __init__(
+    entry_id: str
+    manager: PassManager
+    config: dict[str, Any]
+
+
+class GuestServer:
+    """Serve one or more access points on a shared local port."""
+
+    def __init__(self, hass: HomeAssistant, port: int) -> None:
+        self.hass = hass
+        self.port = port
+        self._access_points: dict[str, GuestAccessPoint] = {}
+        self._legacy_entry_id: str | None = None
+        self._runner: web.AppRunner | None = None
+
+    def register(
         self,
-        hass: HomeAssistant,
+        entry_id: str,
         manager: PassManager,
         config: dict[str, Any],
+        *,
+        legacy: bool = False,
     ) -> None:
-        self.hass = hass
-        self.manager = manager
-        self.config = config
-        self.port = int(config[CONF_GUEST_PORT])
-        self.external_url = self._build_external_url()
-        self._runner: web.AppRunner | None = None
+        """Register an access point before or after the server starts."""
+        self._access_points[entry_id] = GuestAccessPoint(entry_id, manager, config)
+        if legacy:
+            self._legacy_entry_id = entry_id
+
+    def unregister(self, entry_id: str) -> None:
+        """Remove an access point from this server."""
+        self._access_points.pop(entry_id, None)
+        if self._legacy_entry_id == entry_id:
+            self._legacy_entry_id = None
+
+    @property
+    def empty(self) -> bool:
+        """Return whether no access points remain."""
+        return not self._access_points
 
     async def async_start(self) -> None:
         """Start the standalone aiohttp server."""
         app = web.Application(client_max_size=16 * 1024)
+        app.router.add_get(
+            "/gate-pass/guest/{entry_id}/{pass_id}/{secret}", self._handle_page
+        )
+        app.router.add_get(
+            "/gate-pass/api/{entry_id}/{pass_id}/{secret}/status",
+            self._handle_status,
+        )
+        app.router.add_post(
+            "/gate-pass/api/{entry_id}/{pass_id}/{secret}/open",
+            self._handle_open,
+        )
+        # Preserve links created by the pre-0.4 single-access-point version.
         app.router.add_get("/gate-pass/guest/{pass_id}/{secret}", self._handle_page)
         app.router.add_get(
             "/gate-pass/api/{pass_id}/{secret}/status", self._handle_status
@@ -254,12 +296,14 @@ class GuestServer:
             await self._runner.cleanup()
             self._runner = None
 
-    def build_guest_url(self, pass_id: str, secret: str) -> str:
+    def build_guest_url(self, entry_id: str, pass_id: str, secret: str) -> str:
         """Build a public guest URL from one-time credentials."""
-        return f"{self.external_url}/gate-pass/guest/{pass_id}/{secret}"
+        target = self._access_points[entry_id]
+        external_url = self._build_external_url(target.config)
+        return f"{external_url}/gate-pass/guest/{entry_id}/{pass_id}/{secret}"
 
-    def _build_external_url(self) -> str:
-        public = str(self.config.get(CONF_PUBLIC_BASE_URL, "")).strip().rstrip("/")
+    def _build_external_url(self, config: dict[str, Any]) -> str:
+        public = str(config.get(CONF_PUBLIC_BASE_URL, "")).strip().rstrip("/")
         if public:
             return public
         host = self._derive_host()
@@ -276,9 +320,23 @@ class GuestServer:
                 continue
         return "homeassistant.local"
 
+    def _resolve_access_point(self, request: web.Request) -> GuestAccessPoint | None:
+        entry_id = request.match_info.get("entry_id") or self._legacy_entry_id
+        if entry_id is None and len(self._access_points) == 1:
+            entry_id = next(iter(self._access_points))
+        return self._access_points.get(entry_id) if entry_id else None
+
     async def _handle_page(self, request: web.Request) -> web.Response:
+        target = self._resolve_access_point(request)
+        if target is None:
+            return web.Response(
+                text=INVALID_PAGE_HTML,
+                content_type="text/html",
+                status=404,
+                headers=PAGE_HEADERS,
+            )
         try:
-            await self.manager.async_get_valid(
+            await target.manager.async_get_valid(
                 request.match_info["pass_id"], request.match_info["secret"]
             )
         except PassUnavailableError as err:
@@ -299,8 +357,13 @@ class GuestServer:
         )
 
     async def _handle_status(self, request: web.Request) -> web.Response:
+        target = self._resolve_access_point(request)
+        if target is None:
+            return web.json_response(
+                {"error": "Access point not found"}, status=404, headers=API_HEADERS
+            )
         try:
-            guest_pass = await self.manager.async_get_valid(
+            guest_pass = await target.manager.async_get_valid(
                 request.match_info["pass_id"], request.match_info["secret"]
             )
         except PassUnavailableError as err:
@@ -309,8 +372,8 @@ class GuestServer:
                     {
                         "error": err.reason,
                         "valid_from": err.valid_from,
-                        "access_name": self.config[CONF_ACCESS_NAME],
-                        "action_label": self.config[CONF_ACTION_LABEL],
+                        "access_name": target.config[CONF_ACCESS_NAME],
+                        "action_label": target.config[CONF_ACTION_LABEL],
                         "label": err.label,
                     },
                     status=425,
@@ -327,8 +390,8 @@ class GuestServer:
         )
         return web.json_response(
             {
-                "access_name": self.config[CONF_ACCESS_NAME],
-                "action_label": self.config[CONF_ACTION_LABEL],
+                "access_name": target.config[CONF_ACCESS_NAME],
+                "action_label": target.config[CONF_ACTION_LABEL],
                 "label": guest_pass["label"],
                 "valid_from": guest_pass.get("valid_from"),
                 "expires_at": guest_pass["expires_at"],
@@ -338,6 +401,11 @@ class GuestServer:
         )
 
     async def _handle_open(self, request: web.Request) -> web.Response:
+        target = self._resolve_access_point(request)
+        if target is None:
+            return web.json_response(
+                {"error": "Access point not found"}, status=404, headers=API_HEADERS
+            )
         if not self._check_browser_origin(request):
             return web.json_response(
                 {"error": "Cross-site request rejected"},
@@ -368,7 +436,7 @@ class GuestServer:
             )
 
         try:
-            guest_pass = await self.manager.async_reserve_use(pass_id, secret)
+            guest_pass = await target.manager.async_reserve_use(pass_id, secret)
         except PassBusyError:
             return web.json_response(
                 {"error": "Action already in progress"},
@@ -388,7 +456,7 @@ class GuestServer:
                 headers=API_HEADERS,
             )
 
-        domain, _, service = str(self.config[CONF_SERVICE]).partition(".")
+        domain, _, service = str(target.config[CONF_SERVICE]).partition(".")
         try:
             if not self.hass.services.has_service(domain, service):
                 raise RuntimeError(
@@ -397,11 +465,11 @@ class GuestServer:
             await self.hass.services.async_call(
                 domain,
                 service,
-                {"entity_id": self.config[CONF_ENTITY_ID]},
+                {"entity_id": target.config[CONF_ENTITY_ID]},
                 blocking=True,
             )
         except Exception:
-            await self.manager.async_release_use(pass_id)
+            await target.manager.async_release_use(pass_id)
             _LOGGER.exception("Gate Pass action failed")
             return web.json_response(
                 {"error": "Home Assistant action failed"},
@@ -409,52 +477,21 @@ class GuestServer:
                 headers=API_HEADERS,
             )
 
-        committed = await self.manager.async_commit_use(pass_id)
+        committed = await target.manager.async_commit_use(pass_id)
         self.hass.bus.async_fire(
             EVENT_PASS_USED,
             {
                 "pass_id": pass_id,
                 "label": guest_pass["label"],
                 "use_count": committed["use_count"],
+                "config_entry_id": target.entry_id,
+                "access_name": target.config[CONF_ACCESS_NAME],
             },
         )
-        await self._async_send_success_notification(guest_pass["label"])
+        await async_send_notification(
+            self.hass, target.config, "used", label=guest_pass["label"]
+        )
         return web.json_response({"success": True}, headers=API_HEADERS)
-
-    async def _async_send_success_notification(self, label: str) -> None:
-        """Send the optional administrator-configured success notification."""
-        notification_service = str(
-            self.config.get(CONF_NOTIFICATION_SERVICE, "")
-        ).strip()
-        if not notification_service:
-            return
-
-        domain, _, service = notification_service.partition(".")
-        if not self.hass.services.has_service(domain, service):
-            _LOGGER.warning(
-                "Gate Pass notification service %s is unavailable",
-                notification_service,
-            )
-            return
-
-        access_name = str(self.config[CONF_ACCESS_NAME])
-        language = str(getattr(self.hass.config, "language", "en")).lower()
-        if language.startswith("de"):
-            message = f'"{label}" hat den Zugang erfolgreich verwendet.'
-        else:
-            message = f'"{label}" successfully used the access link.'
-        try:
-            await self.hass.services.async_call(
-                domain,
-                service,
-                {
-                    "title": f"Gate Pass: {access_name}",
-                    "message": message,
-                },
-                blocking=True,
-            )
-        except Exception:
-            _LOGGER.exception("Gate Pass success notification failed")
 
     @staticmethod
     def _check_browser_origin(request: web.Request) -> bool:

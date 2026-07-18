@@ -58,6 +58,22 @@ def test_translations_have_matching_top_level_keys() -> None:
     assert "https://" not in json.dumps(german)
 
 
+def test_service_descriptions_translations_and_icons_match() -> None:
+    """Keep every administrator action visible and translated in Home Assistant."""
+    english = _read_json(INTEGRATION / "translations" / "en.json")
+    icons = _read_json(INTEGRATION / "icons.json")
+    services = {
+        line.split(":", 1)[0]
+        for line in (INTEGRATION / "services.yaml")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line and not line.startswith(" ") and ":" in line
+    }
+
+    assert services == set(english["services"])
+    assert services == set(icons["services"])
+
+
 def test_brand_icon_dimensions() -> None:
     """Ship normal and high-DPI Home Assistant brand icons."""
     brand = INTEGRATION / "brand"

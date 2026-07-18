@@ -2,6 +2,30 @@
 
 All notable changes to Gate Pass HA are documented here.
 
+## [0.4.0-beta.1] - 2026-07-19
+
+### Added
+
+- Multiple independently configured access points
+- Shared guest-server ports with access-point-scoped public links
+- Dynamic access-point selection or fixed access-point cards
+- Optional mobile-friendly quick presets in the visual card editor
+- Active-pass and last-successful-use Home Assistant sensors per access point
+- Configurable notifications for pass creation, use, and revocation
+- Administrator-only CSV activity export
+
+### Changed
+
+- Pass storage is separated by config entry and the previous single-instance
+  store is copied automatically during upgrade
+- Management actions accept an optional `config_entry_id` and require it only
+  when multiple access points are loaded
+
+### Compatibility
+
+- Existing single-access configurations and pre-0.4 guest links remain valid
+- The new capabilities are optional; a single access point behaves as before
+
 ## [0.3.0] - 2026-07-18
 
 ### Added
@@ -44,3 +68,4 @@ All notable changes to Gate Pass HA are documented here.
 
 [0.3.0]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.3.0
 [0.2.1]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.2.1
+[0.4.0-beta.1]: https://github.com/JayTheG5368/gate-pass-ha/compare/v0.3.0...HEAD

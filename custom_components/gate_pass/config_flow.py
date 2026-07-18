@@ -19,6 +19,7 @@ from .const import (
     CONF_DEFAULT_MAX_USES,
     CONF_ENTITY_ID,
     CONF_GUEST_PORT,
+    CONF_NOTIFICATION_EVENTS,
     CONF_NOTIFICATION_SERVICE,
     CONF_PUBLIC_BASE_URL,
     CONF_SERVICE,
@@ -27,10 +28,12 @@ from .const import (
     DEFAULT_DURATION_HOURS,
     DEFAULT_GUEST_PORT,
     DEFAULT_MAX_USES,
+    DEFAULT_NOTIFICATION_EVENTS,
     DEFAULT_SERVICE,
     DOMAIN,
 )
 from .validation import (
+    normalize_notification_events,
     normalize_notification_service,
     normalize_public_base_url,
     normalize_service,
@@ -72,6 +75,28 @@ def _notification_service_options(
             )
         )
     return options
+
+
+def _notification_event_options(hass: HomeAssistant) -> list[selector.SelectOptionDict]:
+    """Build localized lifecycle notification choices."""
+    german = str(getattr(hass.config, "language", "en")).lower().startswith("de")
+    labels = (
+        {
+            "created": "Zugang erstellt",
+            "used": "Zugang verwendet",
+            "revoked": "Zugang widerrufen",
+        }
+        if german
+        else {
+            "created": "Pass created",
+            "used": "Pass used",
+            "revoked": "Pass revoked",
+        }
+    )
+    return [
+        selector.SelectOptionDict(value=value, label=label)
+        for value, label in labels.items()
+    ]
 
 
 def _schema(
@@ -125,6 +150,18 @@ def _schema(
                     custom_value=True,
                 )
             ),
+            vol.Optional(
+                CONF_NOTIFICATION_EVENTS,
+                default=current.get(
+                    CONF_NOTIFICATION_EVENTS, DEFAULT_NOTIFICATION_EVENTS
+                ),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=_notification_event_options(hass),
+                    multiple=True,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
             vol.Required(
                 CONF_DEFAULT_DURATION_HOURS,
                 default=current.get(
@@ -170,6 +207,9 @@ def _validate(user_input: dict[str, Any]) -> dict[str, Any]:
     result[CONF_NOTIFICATION_SERVICE] = normalize_notification_service(
         notification_service
     )
+    result[CONF_NOTIFICATION_EVENTS] = normalize_notification_events(
+        result.get(CONF_NOTIFICATION_EVENTS, DEFAULT_NOTIFICATION_EVENTS)
+    )
     result[CONF_GUEST_PORT] = int(result[CONF_GUEST_PORT])
     result[CONF_DEFAULT_DURATION_HOURS] = float(result[CONF_DEFAULT_DURATION_HOURS])
     result[CONF_DEFAULT_MAX_USES] = int(result[CONF_DEFAULT_MAX_USES])
@@ -194,10 +234,7 @@ class GatePassConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Create the single Gate Pass instance."""
-        if self._async_current_entries():
-            return self.async_abort(reason="single_instance_allowed")
-
+        """Create one independently configurable access point."""
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
@@ -208,6 +245,8 @@ class GatePassConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors[CONF_PUBLIC_BASE_URL] = "invalid_url"
                 elif reason == "invalid_notification_service":
                     errors[CONF_NOTIFICATION_SERVICE] = "invalid_notification_service"
+                elif reason == "invalid_notification_events":
+                    errors[CONF_NOTIFICATION_EVENTS] = "invalid_notification_events"
                 elif reason == "invalid_service":
                     errors[CONF_SERVICE] = "invalid_service"
                 elif reason == "domain_mismatch":
@@ -251,6 +290,8 @@ class GatePassOptionsFlow(OptionsFlow):
                     errors[CONF_PUBLIC_BASE_URL] = "invalid_url"
                 elif reason == "invalid_notification_service":
                     errors[CONF_NOTIFICATION_SERVICE] = "invalid_notification_service"
+                elif reason == "invalid_notification_events":
+                    errors[CONF_NOTIFICATION_EVENTS] = "invalid_notification_events"
                 elif reason == "invalid_service":
                     errors[CONF_SERVICE] = "invalid_service"
                 elif reason == "domain_mismatch":

@@ -1,9 +1,12 @@
 {
   "services": {
     "create_pass": {"service": "mdi:ticket-confirmation-outline"},
+    "list_access_points": {"service": "mdi:door-open"},
     "list_passes": {"service": "mdi:format-list-bulleted"},
+    "list_activity": {"service": "mdi:history"},
+    "export_activity": {"service": "mdi:file-delimited-outline"},
+    "clear_activity": {"service": "mdi:history-off"},
     "revoke_pass": {"service": "mdi:ticket-off-outline"},
     "revoke_all": {"service": "mdi:delete-alert-outline"}
   }
 }
-

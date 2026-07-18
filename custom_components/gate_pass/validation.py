@@ -8,6 +8,8 @@ from urllib.parse import urlsplit
 
 import voluptuous as vol
 
+from .const import DEFAULT_NOTIFICATION_EVENTS, NOTIFICATION_EVENTS
+
 _SERVICE_PATTERN = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
 
 
@@ -71,6 +73,21 @@ def normalize_notification_service(value: Any) -> str:
     ):
         raise vol.Invalid("invalid_notification_service")
     return value
+
+
+def normalize_notification_events(value: Any) -> list[str]:
+    """Validate and normalize optional notification event selections."""
+    if value is None:
+        return list(DEFAULT_NOTIFICATION_EVENTS)
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple, set)):
+        raise vol.Invalid("invalid_notification_events")
+
+    normalized = list(dict.fromkeys(str(item).strip().lower() for item in value))
+    if any(item not in NOTIFICATION_EVENTS for item in normalized):
+        raise vol.Invalid("invalid_notification_events")
+    return normalized
 
 
 def service_domain(service: str) -> str:

@@ -1,5 +1,9 @@
 create_pass:
   fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: gate_pass
     label:
       example: "Paketdienst"
       selector:
@@ -23,17 +27,50 @@ create_pass:
       selector:
         datetime:
 
-list_passes: {}
+list_access_points: {}
 
-list_activity: {}
+list_passes:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: gate_pass
 
-clear_activity: {}
+list_activity:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: gate_pass
+
+export_activity:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: gate_pass
+
+clear_activity:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: gate_pass
 
 revoke_pass:
   fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: gate_pass
     pass_id:
       required: true
       selector:
         text:
 
-revoke_all: {}
+revoke_all:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: gate_pass

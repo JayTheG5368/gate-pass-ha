@@ -4,6 +4,7 @@ import pytest
 import voluptuous as vol
 
 from custom_components.gate_pass.validation import (
+    normalize_notification_events,
     normalize_notification_service,
     normalize_public_base_url,
     normalize_service,
@@ -65,6 +66,18 @@ def test_normalize_notification_service(value: str | None, expected: str) -> Non
 def test_reject_invalid_notification_service(value: str) -> None:
     with pytest.raises(vol.Invalid, match="invalid_notification_service"):
         normalize_notification_service(value)
+
+
+def test_normalize_notification_events() -> None:
+    assert normalize_notification_events(["created", "used", "created"]) == [
+        "created",
+        "used",
+    ]
+
+
+def test_reject_invalid_notification_events() -> None:
+    with pytest.raises(vol.Invalid, match="invalid_notification_events"):
+        normalize_notification_events(["used", "expired"])
 
 
 @pytest.mark.parametrize("value", ["button", "button/press", "button.press.now"])

@@ -49,6 +49,12 @@ const TEXT = {
     clearActivityError: 'Verlauf konnte nicht gelöscht werden.',
     activityCreated: 'Zugang erstellt', activityUsed: 'Zugang verwendet',
     activityRevoked: 'Zugang widerrufen', activityUnknown: 'Aktivität',
+    accessPoint: 'Zugangspunkt', chooseInCard: 'In der Karte auswählen',
+    presets: 'Schnellvorlagen', exportActivity: 'CSV exportieren',
+    exportError: 'CSV-Export konnte nicht erstellt werden.',
+    defaultDuration: 'Standard-Gültigkeit', defaultUses: 'Standard-Nutzungen',
+    addPreset: 'Vorlage hinzufügen', presetName: 'Name der Vorlage',
+    presetLabel: 'Name des Zugangs', presetStart: 'Start', removePreset: 'Vorlage entfernen',
   },
   en: {
     title: 'Gate Pass', active: 'Active passes', create: 'Create pass',
@@ -75,6 +81,12 @@ const TEXT = {
     clearActivityError: 'Activity could not be cleared.',
     activityCreated: 'Pass created', activityUsed: 'Pass used',
     activityRevoked: 'Pass revoked', activityUnknown: 'Activity',
+    accessPoint: 'Access point', chooseInCard: 'Choose in card',
+    presets: 'Quick presets', exportActivity: 'Export CSV',
+    exportError: 'CSV export could not be created.',
+    defaultDuration: 'Default validity', defaultUses: 'Default uses',
+    addPreset: 'Add preset', presetName: 'Preset name',
+    presetLabel: 'Pass label', presetStart: 'Start', removePreset: 'Remove preset',
   },
 };
 
@@ -94,6 +106,10 @@ class GatePassCard extends LitElement {
     _notice: { state: true },
     _startOption: { state: true },
     _customStart: { state: true },
+    _accessPoints: { state: true },
+    _selectedAccessPoint: { state: true },
+    _draftDuration: { state: true },
+    _draftUses: { state: true },
   };
 
   constructor() {
@@ -110,23 +126,33 @@ class GatePassCard extends LitElement {
     this._notice = '';
     this._startOption = 'now';
     this._customStart = '';
+    this._accessPoints = [];
+    this._selectedAccessPoint = '';
+    this._draftDuration = null;
+    this._draftUses = null;
     this._draftLabel = null;
     this._eventUnsubs = [];
     this._clearTimer = null;
   }
 
   setConfig(config) {
+    const previousAccessPoint = this._config?.access_point || '';
     this._config = {
       title: '', icon: 'mdi:garage-variant', default_name: '',
-      default_duration: 1, default_max_uses: 1, ...config,
+      default_duration: 1, default_max_uses: 1, presets: [], ...config,
     };
+    if (!Array.isArray(this._config.presets)) this._config.presets = [];
+    if (this._hass && previousAccessPoint !== (this._config.access_point || '')) {
+      this._selectedAccessPoint = this._config.access_point || '';
+      this._initialize();
+    }
   }
 
   set hass(hass) {
     const firstLoad = !this._hass;
     this._hass = hass;
     if (firstLoad) {
-      this._refresh();
+      this._initialize();
       this._subscribe();
     }
   }
@@ -146,11 +172,39 @@ class GatePassCard extends LitElement {
     return TEXT[this._hass?.language === 'de' ? 'de' : 'en'];
   }
 
+  async _initialize() {
+    try { await this._loadAccessPoints(); } catch (_) { /* refresh reports service errors */ }
+    await this._refresh();
+  }
+
+  async _loadAccessPoints() {
+    if (!this._hass) return;
+    const result = await this._hass.callWS({
+      type: 'call_service', domain: 'gate_pass', service: 'list_access_points', return_response: true,
+    });
+    this._accessPoints = result?.response?.access_points || [];
+    const available = new Set(this._accessPoints.map((item) => item.config_entry_id));
+    const fixed = String(this._config?.access_point || '');
+    if (fixed) this._selectedAccessPoint = fixed;
+    else if (!available.has(this._selectedAccessPoint)) {
+      this._selectedAccessPoint = this._accessPoints[0]?.config_entry_id || '';
+    }
+  }
+
+  _serviceData(extra = {}) {
+    return this._selectedAccessPoint
+      ? { config_entry_id: this._selectedAccessPoint, ...extra }
+      : { ...extra };
+  }
+
   async _subscribe() {
     if (!this._hass?.connection || this._eventUnsubs.length) return;
     try {
       for (const event of ['gate_pass_created', 'gate_pass_revoked', 'gate_pass_used', 'gate_pass_activity_cleared']) {
-        const unsubscribe = await this._hass.connection.subscribeEvents(() => this._refresh(), event);
+        const unsubscribe = await this._hass.connection.subscribeEvents((message) => {
+          const entryId = message?.data?.config_entry_id;
+          if (!entryId || entryId === this._selectedAccessPoint) this._refresh();
+        }, event);
         this._eventUnsubs.push(unsubscribe);
       }
     } catch (_) {
@@ -167,14 +221,19 @@ class GatePassCard extends LitElement {
 
   async _refresh() {
     if (!this._hass || this._loading) return;
+    if (!this._selectedAccessPoint) {
+      try { await this._loadAccessPoints(); } catch (_) { /* handled below */ }
+    }
     this._loading = true;
     try {
       const [passesResult, activityResult] = await Promise.all([
         this._hass.callWS({
           type: 'call_service', domain: 'gate_pass', service: 'list_passes', return_response: true,
+          service_data: this._serviceData(),
         }),
         this._hass.callWS({
           type: 'call_service', domain: 'gate_pass', service: 'list_activity', return_response: true,
+          service_data: this._serviceData(),
         }),
       ]);
       this._passes = passesResult?.response?.passes || [];
@@ -186,6 +245,26 @@ class GatePassCard extends LitElement {
     } finally {
       this._loading = false;
     }
+  }
+
+  async _refreshAll() {
+    if (this._loading) return;
+    try {
+      await this._loadAccessPoints();
+      await this._refresh();
+    } catch (error) {
+      this._error = `${this._text.loadError} ${error.message || ''}`.trim();
+    }
+  }
+
+  async _accessPointChanged(event) {
+    this._selectedAccessPoint = event.currentTarget.value;
+    this._passes = [];
+    this._activity = [];
+    this._accessName = '';
+    this._showForm = false;
+    this._closeResult();
+    await this._refresh();
   }
 
   async _createPass(event) {
@@ -203,7 +282,7 @@ class GatePassCard extends LitElement {
       if (validFrom) serviceData.valid_from = validFrom;
       const result = await this._hass.callWS({
         type: 'call_service', domain: 'gate_pass', service: 'create_pass', return_response: true,
-        service_data: serviceData,
+        service_data: this._serviceData(serviceData),
       });
       this._newPass = result?.response || null;
       this._qrDataUrl = this._newPass?.guest_url
@@ -215,6 +294,8 @@ class GatePassCard extends LitElement {
       this._startOption = 'now';
       this._customStart = '';
       this._draftLabel = null;
+      this._draftDuration = null;
+      this._draftUses = null;
       this._scheduleClear();
       this._loading = false;
       await this._refresh();
@@ -231,7 +312,7 @@ class GatePassCard extends LitElement {
     try {
       await this._hass.callWS({
         type: 'call_service', domain: 'gate_pass', service: 'revoke_pass',
-        service_data: { pass_id: passId }, return_response: true,
+        service_data: this._serviceData({ pass_id: passId }), return_response: true,
       });
       this._passes = this._passes.filter((item) => item.pass_id !== passId);
       this._error = '';
@@ -248,7 +329,7 @@ class GatePassCard extends LitElement {
     try {
       await this._hass.callWS({
         type: 'call_service', domain: 'gate_pass', service: 'revoke_all',
-        return_response: true,
+        service_data: this._serviceData(), return_response: true,
       });
       this._passes = [];
       this._error = '';
@@ -265,12 +346,38 @@ class GatePassCard extends LitElement {
     try {
       await this._hass.callWS({
         type: 'call_service', domain: 'gate_pass', service: 'clear_activity',
-        return_response: true,
+        service_data: this._serviceData(), return_response: true,
       });
       this._activity = [];
       this._error = '';
     } catch (error) {
       this._error = `${this._text.clearActivityError} ${error.message || ''}`.trim();
+    } finally {
+      this._loading = false;
+    }
+  }
+
+  async _exportActivity() {
+    this._loading = true;
+    try {
+      const result = await this._hass.callWS({
+        type: 'call_service', domain: 'gate_pass', service: 'export_activity',
+        service_data: this._serviceData(), return_response: true,
+      });
+      const response = result?.response || {};
+      const blob = new Blob(['\ufeff', response.csv || ''], { type: response.content_type || 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = response.filename || 'gate-pass-activity.csv';
+      link.hidden = true;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      this._error = '';
+    } catch (error) {
+      this._error = `${this._text.exportError} ${error.message || ''}`.trim();
     } finally {
       this._loading = false;
     }
@@ -367,11 +474,34 @@ class GatePassCard extends LitElement {
     return `${prefix} ${user}`.slice(0, 80);
   }
 
+  _labelFromTemplate(template) {
+    const user = String(this._hass?.user?.name || '').trim();
+    return String(template || '').replaceAll('{user}', user).trim().slice(0, 80);
+  }
+
+  _applyPreset(preset) {
+    this._view = 'active';
+    this._showForm = true;
+    this._draftLabel = this._labelFromTemplate(preset.label || preset.name) || this._defaultLabel();
+    this._draftDuration = Number(preset.duration_hours);
+    this._draftUses = Number(preset.max_uses);
+    this._startOption = ['now', 'two_hours', 'four_hours', 'tomorrow'].includes(preset.start_option)
+      ? preset.start_option : 'now';
+    this._customStart = '';
+  }
+
   _toggleForm() {
     this._view = 'active';
     this._showForm = !this._showForm;
-    if (this._showForm) this._draftLabel = this._defaultLabel();
-    else this._draftLabel = null;
+    if (this._showForm) {
+      this._draftLabel = this._defaultLabel();
+      this._draftDuration = Number(this._config.default_duration);
+      this._draftUses = Number(this._config.default_max_uses);
+    } else {
+      this._draftLabel = null;
+      this._draftDuration = null;
+      this._draftUses = null;
+    }
   }
 
   _cancelForm() {
@@ -379,6 +509,8 @@ class GatePassCard extends LitElement {
     this._startOption = 'now';
     this._customStart = '';
     this._draftLabel = null;
+    this._draftDuration = null;
+    this._draftUses = null;
   }
 
   _remaining(iso) {
@@ -398,10 +530,22 @@ class GatePassCard extends LitElement {
         <header>
           <div class="title-block"><ha-icon icon=${this._config?.icon || 'mdi:garage-variant'}></ha-icon><div><h2>${this._config?.title || this._accessName || t.title}</h2>${this._config?.title && this._accessName ? html`<p>${this._accessName}</p>` : ''}</div></div>
           <div class="header-actions">
-            <ha-icon-button title=${t.refresh} @click=${this._refresh} .disabled=${this._loading}><ha-icon icon="mdi:refresh"></ha-icon></ha-icon-button>
+            <ha-icon-button title=${t.refresh} @click=${this._refreshAll} .disabled=${this._loading}><ha-icon icon="mdi:refresh"></ha-icon></ha-icon-button>
             <ha-button appearance="accent" @click=${this._toggleForm}><ha-icon icon="mdi:plus" slot="start"></ha-icon>${t.create}</ha-button>
           </div>
         </header>
+
+        ${!this._config?.access_point && this._accessPoints.length > 1 ? html`
+          <label class="access-selector"><span>${t.accessPoint}</span><select .value=${this._selectedAccessPoint} @change=${this._accessPointChanged}>
+            ${this._accessPoints.map((item) => html`<option value=${item.config_entry_id}>${item.access_name}</option>`)}
+          </select></label>
+        ` : ''}
+
+        ${this._config?.presets?.length ? html`
+          <div class="presets"><span>${t.presets}</span><div>
+            ${this._config.presets.map((preset) => html`<button type="button" @click=${() => this._applyPreset(preset)}>${preset.name || preset.label || t.create}</button>`)}
+          </div></div>
+        ` : ''}
 
         ${this._error ? html`<div class="banner error">${this._error}</div>` : ''}
         ${this._notice ? html`<div class="banner notice">${this._notice}</div>` : ''}
@@ -424,7 +568,7 @@ class GatePassCard extends LitElement {
           </section>
         ` : html`
           <section>
-            <div class="section-heading"><h3>${t.activity}</h3>${this._activity.length ? html`<ha-button class="danger" @click=${this._clearActivity}>${t.clearActivity}</ha-button>` : ''}</div>
+            <div class="section-heading"><h3>${t.activity}</h3>${this._activity.length ? html`<div class="section-actions"><ha-button @click=${this._exportActivity}><ha-icon icon="mdi:download" slot="start"></ha-icon>${t.exportActivity}</ha-button><ha-button class="danger" @click=${this._clearActivity}>${t.clearActivity}</ha-button></div>` : ''}</div>
             ${this._activity.length ? this._activity.map((item) => this._renderActivity(item, t)) : html`<div class="empty"><ha-icon icon="mdi:history"></ha-icon><span>${t.noActivity}</span></div>`}
           </section>
         `}
@@ -434,8 +578,8 @@ class GatePassCard extends LitElement {
 
   _renderForm(t) {
     const language = this._hass?.language === 'de' ? 'de' : 'en';
-    const durationValue = Number(this._config.default_duration);
-    const usesValue = Number(this._config.default_max_uses);
+    const durationValue = Number(this._draftDuration ?? this._config.default_duration);
+    const usesValue = Number(this._draftUses ?? this._config.default_max_uses);
     const configuredDuration = Number.isFinite(durationValue) && durationValue >= 0.1 && durationValue <= 720
       ? durationValue : 1;
     const configuredUses = Number.isInteger(usesValue) && usesValue >= 0 && usesValue <= 1000
@@ -458,9 +602,9 @@ class GatePassCard extends LitElement {
       <form @submit=${this._createPass}>
         <label><span>${t.label}</span><input name="label" maxlength="80" .value=${this._draftLabel ?? this._defaultLabel()} @input=${(event) => { this._draftLabel = event.currentTarget.value; }} placeholder=${t.labelPlaceholder} required></label>
         <div class="form-grid">
-          <label><span>${t.duration}</span><select name="duration_hours" required>${durations.map(([value, label]) => html`<option value=${String(value)} ?selected=${value === configuredDuration}>${label}</option>`)}</select></label>
-          <label><span>${t.uses}</span><select name="max_uses" aria-description=${t.unlimited} required>${uses.map(([value, label]) => html`<option value=${String(value)} ?selected=${value === configuredUses}>${label}</option>`)}</select></label>
-          <label class="full-width"><span>${t.validFrom}</span><select name="start_option" @change=${this._startOptionChanged} required>${startOptions.map(([value, label]) => html`<option value=${value} ?selected=${value === this._startOption}>${label}</option>`)}</select></label>
+          <label><span>${t.duration}</span><select name="duration_hours" .value=${String(configuredDuration)} @change=${(event) => { this._draftDuration = Number(event.currentTarget.value); }} required>${durations.map(([value, label]) => html`<option value=${String(value)}>${label}</option>`)}</select></label>
+          <label><span>${t.uses}</span><select name="max_uses" .value=${String(configuredUses)} @change=${(event) => { this._draftUses = Number(event.currentTarget.value); }} aria-description=${t.unlimited} required>${uses.map(([value, label]) => html`<option value=${String(value)}>${label}</option>`)}</select></label>
+          <label class="full-width"><span>${t.validFrom}</span><select name="start_option" .value=${this._startOption} @change=${this._startOptionChanged} required>${startOptions.map(([value, label]) => html`<option value=${value}>${label}</option>`)}</select></label>
           ${this._startOption === 'custom' ? html`<label class="full-width"><span>${t.customStart}</span><input name="valid_from" type="datetime-local" min=${this._localDateTimeValue(new Date())} .value=${this._customStart} @change=${(event) => { this._customStart = event.currentTarget.value; }} required></label>` : ''}
         </div>
         <div class="form-actions"><ha-button variant="neutral" appearance="filled" type="button" @click=${this._cancelForm}>${t.cancel}</ha-button><ha-button appearance="accent" type="submit" .disabled=${this._loading}>${t.submit}</ha-button></div>
@@ -529,7 +673,7 @@ class GatePassCard extends LitElement {
   static getStubConfig() {
     return {
       title: '', icon: 'mdi:garage-variant', default_name: '',
-      default_duration: 1, default_max_uses: 1,
+      default_duration: 1, default_max_uses: 1, presets: [],
     };
   }
 
@@ -538,18 +682,23 @@ class GatePassCard extends LitElement {
     *, *::before, *::after { box-sizing:border-box; }
     ha-card { padding:16px; color:var(--primary-text-color); min-width:0; }
     header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:14px; border-bottom:1px solid var(--divider-color); }
-    .title-block, .header-actions, .section-heading, .result-heading, .result-actions, .form-actions { display:flex; align-items:center; }
+    .title-block, .header-actions, .section-heading, .section-actions, .result-heading, .result-actions, .form-actions { display:flex; align-items:center; }
     .title-block { gap:10px; min-width:0; } .title-block > ha-icon { color:var(--primary-color); --mdc-icon-size:28px; }
     h2, h3, p { margin:0; } h2 { font-size:1.15rem; } h3 { font-size:.95rem; }
     .title-block p { color:var(--secondary-text-color); font-size:.78rem; margin-top:2px; }
     .header-actions { gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .access-selector { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:10px; margin-top:14px; }
+    .access-selector > span, .presets > span { margin:0; color:var(--secondary-text-color); font-size:.78rem; }
+    .presets { margin-top:14px; }
+    .presets > div { display:flex; gap:8px; overflow-x:auto; padding:6px 0 2px; }
+    .presets button { flex:0 0 auto; min-height:38px; padding:7px 11px; border:1px solid var(--divider-color); border-radius:6px; background:var(--secondary-background-color); color:var(--primary-text-color); font:inherit; font-size:.82rem; cursor:pointer; letter-spacing:0; }
     .tabs { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); margin-top:14px; border-bottom:1px solid var(--divider-color); }
     .tab { min-width:0; min-height:44px; display:flex; align-items:center; justify-content:center; gap:7px; padding:8px 10px; border:0; border-bottom:3px solid transparent; background:transparent; color:var(--secondary-text-color); font:inherit; font-size:.82rem; font-weight:600; line-height:1.2; cursor:pointer; letter-spacing:0; }
     .tab.active { color:var(--primary-color); border-bottom-color:var(--primary-color); }
     .tab ha-icon { --mdc-icon-size:19px; flex:0 0 auto; }
     .tab span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .tab strong { min-width:22px; height:22px; display:inline-grid; place-items:center; padding:0 6px; border-radius:8px; background:var(--secondary-background-color); color:var(--primary-text-color); font-size:.72rem; }
-    section { padding-top:16px; } .section-heading { justify-content:space-between; margin-bottom:8px; }
+    section { padding-top:16px; } .section-heading { justify-content:space-between; gap:8px; margin-bottom:8px; } .section-actions { gap:4px; flex-wrap:wrap; justify-content:flex-end; }
     form, .result { margin-top:14px; padding:14px 0 16px; border-bottom:1px solid var(--divider-color); }
     label { display:block; min-width:0; } label span { display:block; color:var(--secondary-text-color); font-size:.78rem; margin-bottom:5px; }
     input, select { display:block; width:100%; min-width:0; height:44px; padding:8px 10px; border:1px solid var(--divider-color); border-radius:6px; background:var(--card-background-color); color:var(--primary-text-color); font:inherit; letter-spacing:0; }
@@ -576,6 +725,7 @@ class GatePassCard extends LitElement {
       header { align-items:stretch; flex-direction:column; }
       .header-actions { width:100%; justify-content:space-between; flex-wrap:nowrap; }
       .header-actions ha-button { flex:1; }
+      .access-selector { grid-template-columns:minmax(0,1fr); gap:5px; }
       .form-grid { grid-template-columns:minmax(0,1fr); }
       .form-actions, .result-actions { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
       .form-actions ha-button, .result-actions ha-button { width:100%; }
@@ -591,29 +741,102 @@ class GatePassCardEditor extends LitElement {
   static properties = {
     hass: { attribute: false },
     _config: { state: true },
+    _accessPoints: { state: true },
   };
+
+  constructor() {
+    super();
+    this._accessPoints = [];
+    this._accessLoadStarted = false;
+  }
 
   setConfig(config) {
     this._config = { ...config };
+    if (!Array.isArray(this._config.presets)) this._config.presets = [];
   }
 
-  _valueChanged(event) {
-    const config = { ...this._config };
-    const key = event.currentTarget.dataset.configKey;
-    const value = event.currentTarget.value.trim();
-    if (value) config[key] = value;
-    else delete config[key];
+  updated(changedProperties) {
+    if (changedProperties.has('hass') && this.hass && !this._accessLoadStarted) {
+      this._accessLoadStarted = true;
+      this._loadAccessPoints();
+    }
+  }
+
+  async _loadAccessPoints() {
+    try {
+      const result = await this.hass.callWS({
+        type: 'call_service', domain: 'gate_pass', service: 'list_access_points', return_response: true,
+      });
+      this._accessPoints = result?.response?.access_points || [];
+    } catch (_) {
+      this._accessPoints = [];
+    }
+  }
+
+  _emit(config) {
     this._config = config;
     this.dispatchEvent(new CustomEvent('config-changed', {
       detail: { config }, bubbles: true, composed: true,
     }));
   }
 
+  _valueChanged(event) {
+    const config = { ...this._config };
+    const key = event.currentTarget.dataset.configKey;
+    const value = event.currentTarget.value.trim();
+    if (['default_duration', 'default_max_uses'].includes(key)) config[key] = Number(value);
+    else if (value) config[key] = value;
+    else delete config[key];
+    this._emit(config);
+  }
+
+  _addPreset() {
+    const t = TEXT[this.hass?.language === 'de' ? 'de' : 'en'];
+    const presets = [...(this._config.presets || []), {
+      name: t.create,
+      label: '',
+      duration_hours: Number(this._config.default_duration || 1),
+      max_uses: Number(this._config.default_max_uses ?? 1),
+      start_option: 'now',
+    }];
+    this._emit({ ...this._config, presets });
+  }
+
+  _presetChanged(index, event) {
+    const presets = (this._config.presets || []).map((preset) => ({ ...preset }));
+    const key = event.currentTarget.dataset.presetKey;
+    const value = event.currentTarget.value;
+    presets[index][key] = ['duration_hours', 'max_uses'].includes(key) ? Number(value) : value;
+    this._emit({ ...this._config, presets });
+  }
+
+  _removePreset(index) {
+    const presets = (this._config.presets || []).filter((_, itemIndex) => itemIndex !== index);
+    const config = { ...this._config };
+    if (presets.length) config.presets = presets;
+    else delete config.presets;
+    this._emit(config);
+  }
+
   render() {
     if (!this._config) return html``;
     const t = TEXT[this.hass?.language === 'de' ? 'de' : 'en'];
+    const language = this.hass?.language === 'de' ? 'de' : 'en';
+    const durations = DURATION_OPTIONS[language];
+    const uses = USE_OPTIONS[language];
+    const startOptions = [
+      ['now', t.startNow], ['two_hours', t.startTwoHours],
+      ['four_hours', t.startFourHours], ['tomorrow', t.startTomorrow],
+    ];
     return html`
       <div class="editor-grid">
+        <label>
+          <span>${t.accessPoint}</span>
+          <select data-config-key="access_point" .value=${this._config.access_point || ''} @change=${this._valueChanged}>
+            <option value="">${t.chooseInCard}</option>
+            ${this._accessPoints.map((item) => html`<option value=${item.config_entry_id}>${item.access_name}</option>`)}
+          </select>
+        </label>
         <label>
           <span>${t.cardTitle}</span>
           <input data-config-key="title" .value=${this._config.title || ''} placeholder=${t.cardTitlePlaceholder} @change=${this._valueChanged}>
@@ -626,6 +849,23 @@ class GatePassCardEditor extends LitElement {
           <span>${t.defaultName}</span>
           <input data-config-key="default_name" maxlength="80" .value=${this._config.default_name || ''} placeholder=${t.defaultNamePlaceholder} @change=${this._valueChanged}>
         </label>
+        <div class="defaults-grid">
+          <label><span>${t.defaultDuration}</span><select data-config-key="default_duration" .value=${String(this._config.default_duration || 1)} @change=${this._valueChanged}>${durations.map(([value, label]) => html`<option value=${value}>${label}</option>`)}</select></label>
+          <label><span>${t.defaultUses}</span><select data-config-key="default_max_uses" .value=${String(this._config.default_max_uses ?? 1)} @change=${this._valueChanged}>${uses.map(([value, label]) => html`<option value=${value}>${label}</option>`)}</select></label>
+        </div>
+        <section class="preset-editor">
+          <div class="editor-heading"><strong>${t.presets}</strong><ha-button appearance="accent" @click=${this._addPreset}><ha-icon icon="mdi:plus" slot="start"></ha-icon>${t.addPreset}</ha-button></div>
+          ${(this._config.presets || []).map((preset, index) => html`
+            <div class="preset-row">
+              <label><span>${t.presetName}</span><input data-preset-key="name" maxlength="40" .value=${preset.name || ''} @change=${(event) => this._presetChanged(index, event)}></label>
+              <label><span>${t.presetLabel}</span><input data-preset-key="label" maxlength="80" .value=${preset.label || ''} placeholder=${t.defaultNamePlaceholder} @change=${(event) => this._presetChanged(index, event)}></label>
+              <label><span>${t.duration}</span><select data-preset-key="duration_hours" .value=${String(preset.duration_hours || 1)} @change=${(event) => this._presetChanged(index, event)}>${durations.map(([value, label]) => html`<option value=${value}>${label}</option>`)}</select></label>
+              <label><span>${t.uses}</span><select data-preset-key="max_uses" .value=${String(preset.max_uses ?? 1)} @change=${(event) => this._presetChanged(index, event)}>${uses.map(([value, label]) => html`<option value=${value}>${label}</option>`)}</select></label>
+              <label class="preset-start"><span>${t.presetStart}</span><select data-preset-key="start_option" .value=${preset.start_option || 'now'} @change=${(event) => this._presetChanged(index, event)}>${startOptions.map(([value, label]) => html`<option value=${value}>${label}</option>`)}</select></label>
+              <ha-icon-button title=${t.removePreset} @click=${() => this._removePreset(index)}><ha-icon icon="mdi:delete-outline"></ha-icon></ha-icon-button>
+            </div>
+          `)}
+        </section>
       </div>
     `;
   }
@@ -634,12 +874,22 @@ class GatePassCardEditor extends LitElement {
     :host { display:block; padding:8px 0; }
     *, *::before, *::after { box-sizing:border-box; }
     .editor-grid { display:grid; gap:12px; }
-    label, label span, input { display:block; width:100%; }
+    label, label span, input, select { display:block; width:100%; }
     label span { color:var(--secondary-text-color); font-size:.875rem; margin-bottom:6px; }
-    input { min-width:0; height:44px; padding:8px 10px; border:1px solid var(--divider-color); border-radius:6px; background:var(--card-background-color); color:var(--primary-text-color); font:inherit; letter-spacing:0; }
+    input, select { min-width:0; height:44px; padding:8px 10px; border:1px solid var(--divider-color); border-radius:6px; background:var(--card-background-color); color:var(--primary-text-color); font:inherit; letter-spacing:0; }
     .icon-input { display:grid; grid-template-columns:44px minmax(0,1fr); align-items:center; }
     .icon-input ha-icon { width:44px; color:var(--primary-color); }
     .icon-input input { border-start-start-radius:0; border-end-start-radius:0; }
+    .defaults-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; }
+    .preset-editor { padding-top:12px; border-top:1px solid var(--divider-color); }
+    .editor-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .preset-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px; gap:10px; align-items:end; padding:12px 0; border-bottom:1px solid var(--divider-color); }
+    .preset-start { grid-column:1 / 3; }
+    @media (max-width:520px) {
+      .defaults-grid, .preset-row { grid-template-columns:minmax(0,1fr); }
+      .preset-start { grid-column:auto; }
+      .preset-row ha-icon-button { justify-self:end; }
+    }
   `;
 }
 
@@ -647,5 +897,5 @@ if (!customElements.get('gate-pass-card-editor')) customElements.define('gate-pa
 if (!customElements.get('gate-pass-card')) customElements.define('gate-pass-card', GatePassCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: 'gate-pass-card', name: 'Gate Pass', description: 'Temporary access links for one fixed Home Assistant action', preview: false,
+  type: 'gate-pass-card', name: 'Gate Pass', description: 'Temporary links for preconfigured Home Assistant access actions', preview: false,
 });

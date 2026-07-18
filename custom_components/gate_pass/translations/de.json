@@ -3,114 +3,121 @@
   "config": {
     "step": {
       "user": {
-        "title": "Gate Pass einrichten",
-        "description": "Konfiguriere genau eine Home-Assistant-Aktion für zeitlich begrenzte Gastzugänge.",
+        "title": "Gate-Pass-Zugangspunkt hinzufügen",
+        "description": "Konfiguriere eine Home-Assistant-Aktion. Füge die Integration für weitere Zugangspunkte erneut hinzu.",
         "data": {
-          "access_name": "Name des Zugangs",
+          "access_name": "Name des Zugangspunkts",
           "action_label": "Beschriftung der Gast-Schaltfläche",
           "entity_id": "Ziel-Entity",
           "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
-          "notification_service": "Gerät für Erfolgsbenachrichtigung (optional)",
+          "notification_service": "Benachrichtigungsgerät (optional)",
+          "notification_events": "Benachrichtigungsereignisse (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
           "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
         },
         "data_description": {
           "service": "Für einen Button beispielsweise button.press.",
+          "guest_port": "Zugangspunkte können Port und öffentliche URL teilen oder getrennte Ports und URLs verwenden.",
           "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
-          "notification_service": "Wähle den Benachrichtigungsdienst deines Geräts. Nicht aufgeführte notify.*-Dienste können weiterhin manuell eingetragen werden."
+          "notification_service": "Wähle einen Gerätedienst. Nicht aufgeführte klassische notify.*-Dienste können manuell eingetragen werden.",
+          "notification_events": "Wähle aus, bei welchen Ereignissen du benachrichtigt werden möchtest."
         }
       }
     },
     "error": {
-      "invalid_url": "Gib eine gueltige HTTP- oder HTTPS-URL ein.",
+      "invalid_url": "Gib eine gültige HTTP- oder HTTPS-URL ein.",
       "invalid_notification_service": "Gib einen notify.*-Dienst ein oder lasse das Feld leer.",
+      "invalid_notification_events": "Wähle nur unterstützte Benachrichtigungsereignisse.",
       "invalid_service": "Die Aktion muss das Format domain.service haben.",
-      "domain_mismatch": "Entity und Aktion muessen dieselbe Domain verwenden.",
-      "invalid_config": "Pruefe die eingegebenen Werte."
-    },
-    "abort": {"single_instance_allowed": "Gate Pass kann nur einmal eingerichtet werden."}
+      "domain_mismatch": "Entity und Aktion müssen dieselbe Domain verwenden.",
+      "invalid_config": "Prüfe die eingegebenen Werte."
+    }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Gate Pass konfigurieren",
-        "description": "Aenderungen starten den Gast-Webserver neu.",
+        "title": "Zugangspunkt konfigurieren",
+        "description": "Änderungen laden diesen Zugangspunkt neu. Andere Zugangspunkte bleiben verfügbar.",
         "data": {
-          "access_name": "Name des Zugangs",
+          "access_name": "Name des Zugangspunkts",
           "action_label": "Beschriftung der Gast-Schaltfläche",
           "entity_id": "Ziel-Entity",
           "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
-          "notification_service": "Gerät für Erfolgsbenachrichtigung (optional)",
+          "notification_service": "Benachrichtigungsgerät (optional)",
+          "notification_events": "Benachrichtigungsereignisse (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
           "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
         },
         "data_description": {
           "service": "Für einen Button beispielsweise button.press.",
+          "guest_port": "Zugangspunkte können Port und öffentliche URL teilen oder getrennte Ports und URLs verwenden.",
           "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
-          "notification_service": "Wähle den Benachrichtigungsdienst deines Geräts. Nicht aufgeführte notify.*-Dienste können weiterhin manuell eingetragen werden."
+          "notification_service": "Wähle einen Gerätedienst. Nicht aufgeführte klassische notify.*-Dienste können manuell eingetragen werden.",
+          "notification_events": "Wähle aus, bei welchen Ereignissen du benachrichtigt werden möchtest."
         }
       }
     },
     "error": {
-      "invalid_url": "Gib eine gueltige HTTP- oder HTTPS-URL ein.",
+      "invalid_url": "Gib eine gültige HTTP- oder HTTPS-URL ein.",
       "invalid_notification_service": "Gib einen notify.*-Dienst ein oder lasse das Feld leer.",
+      "invalid_notification_events": "Wähle nur unterstützte Benachrichtigungsereignisse.",
       "invalid_service": "Die Aktion muss das Format domain.service haben.",
-      "domain_mismatch": "Entity und Aktion muessen dieselbe Domain verwenden.",
-      "invalid_config": "Pruefe die eingegebenen Werte."
+      "domain_mismatch": "Entity und Aktion müssen dieselbe Domain verwenden.",
+      "invalid_config": "Prüfe die eingegebenen Werte."
     }
   },
   "services": {
+    "list_access_points": {
+      "name": "Zugangspunkte auflisten",
+      "description": "Gibt alle geladenen Gate-Pass-Zugangspunkte für Karten und Automationen zurück."
+    },
     "create_pass": {
       "name": "Zugang erstellen",
       "description": "Erstellt einen zeitlich und optional nach Nutzungen begrenzten Zugangslink.",
       "fields": {
-        "label": {
-          "name": "Bezeichnung",
-          "description": "Name des Gastes oder Zweck des Zugangs."
-        },
-        "duration_hours": {
-          "name": "Gültigkeit",
-          "description": "Gültigkeitsdauer in Stunden."
-        },
-        "max_uses": {
-          "name": "Maximale Nutzungen",
-          "description": "0 erlaubt unbegrenzt viele Nutzungen bis zum Ablauf."
-        },
-        "valid_from": {
-          "name": "Gültig ab",
-          "description": "Optionaler Zeitpunkt, ab dem der Link verwendet werden kann."
-        }
+        "config_entry_id": {"name": "Zugangspunkt", "description": "Ziel-Zugangspunkt. Optional, wenn nur einer konfiguriert ist."},
+        "label": {"name": "Bezeichnung", "description": "Name des Gastes oder Zweck des Zugangs."},
+        "duration_hours": {"name": "Gültigkeit", "description": "Gültigkeitsdauer in Stunden."},
+        "max_uses": {"name": "Maximale Nutzungen", "description": "0 erlaubt unbegrenzt viele Nutzungen bis zum Ablauf."},
+        "valid_from": {"name": "Gültig ab", "description": "Optionaler Zeitpunkt, ab dem der Link verwendet werden kann."}
       }
     },
     "list_passes": {
       "name": "Aktive Zugänge auflisten",
-      "description": "Gibt alle derzeit aktiven Zugänge zurück."
+      "description": "Gibt alle derzeit aktiven Zugänge zurück.",
+      "fields": {"config_entry_id": {"name": "Zugangspunkt", "description": "Ziel-Zugangspunkt."}}
     },
     "list_activity": {
       "name": "Aktivitäten auflisten",
-      "description": "Gibt den gespeicherten Verlauf ohne Link-Geheimnisse oder Netzwerkkennungen zurück."
+      "description": "Gibt den gespeicherten Verlauf ohne Link-Geheimnisse oder Netzwerkkennungen zurück.",
+      "fields": {"config_entry_id": {"name": "Zugangspunkt", "description": "Ziel-Zugangspunkt."}}
+    },
+    "export_activity": {
+      "name": "Aktivitäten exportieren",
+      "description": "Gibt den Verlauf des Zugangspunkts als datensparsame CSV-Datei zurück.",
+      "fields": {"config_entry_id": {"name": "Zugangspunkt", "description": "Ziel-Zugangspunkt."}}
     },
     "clear_activity": {
       "name": "Aktivitäten löschen",
-      "description": "Löscht alle gespeicherten Gate-Pass-Aktivitäten dauerhaft."
+      "description": "Löscht alle gespeicherten Gate-Pass-Aktivitäten dauerhaft.",
+      "fields": {"config_entry_id": {"name": "Zugangspunkt", "description": "Ziel-Zugangspunkt."}}
     },
     "revoke_pass": {
       "name": "Zugang widerrufen",
       "description": "Sperrt einen einzelnen Zugang sofort.",
       "fields": {
-        "pass_id": {
-          "name": "Zugangs-ID",
-          "description": "ID des zu widerrufenden Zugangs."
-        }
+        "config_entry_id": {"name": "Zugangspunkt", "description": "Ziel-Zugangspunkt."},
+        "pass_id": {"name": "Zugangs-ID", "description": "ID des zu widerrufenden Zugangs."}
       }
     },
     "revoke_all": {
       "name": "Alle Zugänge widerrufen",
-      "description": "Sperrt alle aktiven Zugänge sofort."
+      "description": "Sperrt alle aktiven Zugänge eines Zugangspunkts sofort.",
+      "fields": {"config_entry_id": {"name": "Zugangspunkt", "description": "Ziel-Zugangspunkt."}}
     }
   }
 }
