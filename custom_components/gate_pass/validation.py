@@ -75,6 +75,19 @@ def normalize_notification_service(value: Any) -> str:
     return value
 
 
+def normalize_notification_services(value: Any) -> list[str]:
+    """Validate, normalize, and deduplicate optional notify services."""
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple, set)):
+        raise vol.Invalid("invalid_notification_service")
+
+    normalized = [normalize_notification_service(item) for item in value]
+    return list(dict.fromkeys(item for item in normalized if item))
+
+
 def normalize_notification_events(value: Any) -> list[str]:
     """Validate and normalize optional notification event selections."""
     if value is None:

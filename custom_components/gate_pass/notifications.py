@@ -11,6 +11,7 @@ from .const import (
     CONF_ACCESS_NAME,
     CONF_NOTIFICATION_EVENTS,
     CONF_NOTIFICATION_SERVICE,
+    CONF_NOTIFICATION_SERVICES,
     DEFAULT_NOTIFICATION_EVENTS,
 )
 
@@ -26,17 +27,16 @@ async def async_send_notification(
     count: int | None = None,
 ) -> None:
     """Send one configured lifecycle notification without affecting pass actions."""
-    notification_service = str(config.get(CONF_NOTIFICATION_SERVICE, "")).strip()
     enabled_events = config.get(CONF_NOTIFICATION_EVENTS, DEFAULT_NOTIFICATION_EVENTS)
-    if not notification_service or event_type not in enabled_events:
-        return
-
-    domain, _, service = notification_service.partition(".")
-    if not hass.services.has_service(domain, service):
-        _LOGGER.warning(
-            "Gate Pass notification service %s is unavailable",
-            notification_service,
-        )
+    notification_services = config.get(CONF_NOTIFICATION_SERVICES)
+    if notification_services is None:
+        legacy_service = str(config.get(CONF_NOTIFICATION_SERVICE, "")).strip()
+        notification_services = [legacy_service] if legacy_service else []
+    elif isinstance(notification_services, str):
+        notification_services = [notification_services]
+    elif not isinstance(notification_services, (list, tuple, set)):
+        notification_services = []
+    if not notification_services or event_type not in enabled_events:
         return
 
     access_name = str(config[CONF_ACCESS_NAME])
@@ -66,12 +66,24 @@ async def async_send_notification(
             else f'"{label}" successfully used the access link.'
         )
 
-    try:
-        await hass.services.async_call(
-            domain,
-            service,
-            {"title": f"Gate Pass: {access_name}", "message": message},
-            blocking=True,
-        )
-    except Exception:
-        _LOGGER.exception("Gate Pass %s notification failed", event_type)
+    for notification_service in dict.fromkeys(notification_services):
+        domain, _, service = str(notification_service).partition(".")
+        if not hass.services.has_service(domain, service):
+            _LOGGER.warning(
+                "Gate Pass notification service %s is unavailable",
+                notification_service,
+            )
+            continue
+        try:
+            await hass.services.async_call(
+                domain,
+                service,
+                {"title": f"Gate Pass: {access_name}", "message": message},
+                blocking=True,
+            )
+        except Exception:
+            _LOGGER.exception(
+                "Gate Pass %s notification failed for %s",
+                event_type,
+                notification_service,
+            )

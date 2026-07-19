@@ -21,6 +21,7 @@ from .const import (
     CONF_GUEST_PORT,
     CONF_NOTIFICATION_EVENTS,
     CONF_NOTIFICATION_SERVICE,
+    CONF_NOTIFICATION_SERVICES,
     CONF_PUBLIC_BASE_URL,
     CONF_SERVICE,
     DEFAULT_ACCESS_NAME,
@@ -34,13 +35,11 @@ from .const import (
 )
 from .validation import (
     normalize_notification_events,
-    normalize_notification_service,
+    normalize_notification_services,
     normalize_public_base_url,
     normalize_service,
     service_domain,
 )
-
-_NOTIFICATION_DISABLED = "__disabled__"
 
 
 def _notification_service_options(
@@ -49,20 +48,9 @@ def _notification_service_options(
     """Build notification choices from currently registered HA services."""
     services = hass.services.async_services_for_domain("notify")
     values = {f"notify.{service}" for service in services if service != "send_message"}
-    current_service = str(current.get(CONF_NOTIFICATION_SERVICE, "")).strip().lower()
-    if current_service and current_service != _NOTIFICATION_DISABLED:
-        values.add(current_service)
+    values.update(_configured_notification_services(current))
 
-    language = str(getattr(hass.config, "language", "en")).lower()
-    disabled_label = (
-        "Keine Benachrichtigung" if language.startswith("de") else "No notification"
-    )
-    options = [
-        selector.SelectOptionDict(
-            value=_NOTIFICATION_DISABLED,
-            label=disabled_label,
-        )
-    ]
+    options = []
     for service in sorted(values):
         name = service.removeprefix("notify.")
         if name.startswith("mobile_app_"):
@@ -75,6 +63,18 @@ def _notification_service_options(
             )
         )
     return options
+
+
+def _configured_notification_services(current: Mapping[str, Any]) -> list[str]:
+    """Return current services, including the pre-beta.2 single value."""
+    configured = current.get(CONF_NOTIFICATION_SERVICES)
+    if configured is None:
+        configured = current.get(CONF_NOTIFICATION_SERVICE, "")
+    if isinstance(configured, str):
+        configured = [configured] if configured.strip() else []
+    if not isinstance(configured, (list, tuple, set)):
+        return []
+    return [str(item).strip().lower() for item in configured if str(item).strip()]
 
 
 def _notification_event_options(hass: HomeAssistant) -> list[selector.SelectOptionDict]:
@@ -140,14 +140,14 @@ def _schema(
                 default=current.get(CONF_PUBLIC_BASE_URL, ""),
             ): selector.TextSelector(),
             vol.Optional(
-                CONF_NOTIFICATION_SERVICE,
-                default=current.get(CONF_NOTIFICATION_SERVICE, "")
-                or _NOTIFICATION_DISABLED,
+                CONF_NOTIFICATION_SERVICES,
+                default=_configured_notification_services(current),
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=_notification_service_options(hass, current),
                     mode=selector.SelectSelectorMode.DROPDOWN,
                     custom_value=True,
+                    multiple=True,
                 )
             ),
             vol.Optional(
@@ -201,11 +201,8 @@ def _validate(user_input: dict[str, Any]) -> dict[str, Any]:
     result[CONF_PUBLIC_BASE_URL] = normalize_public_base_url(
         result.get(CONF_PUBLIC_BASE_URL, "")
     )
-    notification_service = result.get(CONF_NOTIFICATION_SERVICE, "")
-    if notification_service == _NOTIFICATION_DISABLED:
-        notification_service = ""
-    result[CONF_NOTIFICATION_SERVICE] = normalize_notification_service(
-        notification_service
+    result[CONF_NOTIFICATION_SERVICES] = normalize_notification_services(
+        result.get(CONF_NOTIFICATION_SERVICES, [])
     )
     result[CONF_NOTIFICATION_EVENTS] = normalize_notification_events(
         result.get(CONF_NOTIFICATION_EVENTS, DEFAULT_NOTIFICATION_EVENTS)
@@ -244,7 +241,7 @@ class GatePassConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if reason == "invalid_url":
                     errors[CONF_PUBLIC_BASE_URL] = "invalid_url"
                 elif reason == "invalid_notification_service":
-                    errors[CONF_NOTIFICATION_SERVICE] = "invalid_notification_service"
+                    errors[CONF_NOTIFICATION_SERVICES] = "invalid_notification_service"
                 elif reason == "invalid_notification_events":
                     errors[CONF_NOTIFICATION_EVENTS] = "invalid_notification_events"
                 elif reason == "invalid_service":
@@ -289,7 +286,7 @@ class GatePassOptionsFlow(OptionsFlow):
                 if reason == "invalid_url":
                     errors[CONF_PUBLIC_BASE_URL] = "invalid_url"
                 elif reason == "invalid_notification_service":
-                    errors[CONF_NOTIFICATION_SERVICE] = "invalid_notification_service"
+                    errors[CONF_NOTIFICATION_SERVICES] = "invalid_notification_service"
                 elif reason == "invalid_notification_events":
                     errors[CONF_NOTIFICATION_EVENTS] = "invalid_notification_events"
                 elif reason == "invalid_service":

@@ -12,7 +12,7 @@
           "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
-          "notification_service": "Benachrichtigungsgerät (optional)",
+          "notification_services": "Benachrichtigungsgeräte (optional)",
           "notification_events": "Benachrichtigungsereignisse (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
           "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
@@ -21,7 +21,7 @@
           "service": "Für einen Button beispielsweise button.press.",
           "guest_port": "Zugangspunkte können Port und öffentliche URL teilen oder getrennte Ports und URLs verwenden.",
           "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
-          "notification_service": "Wähle einen Gerätedienst. Nicht aufgeführte klassische notify.*-Dienste können manuell eingetragen werden.",
+          "notification_services": "Wähle ein oder mehrere Geräte. Nicht aufgeführte klassische notify.*-Dienste können manuell eingetragen werden.",
           "notification_events": "Wähle aus, bei welchen Ereignissen du benachrichtigt werden möchtest."
         }
       }
@@ -47,7 +47,7 @@
           "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
-          "notification_service": "Benachrichtigungsgerät (optional)",
+          "notification_services": "Benachrichtigungsgeräte (optional)",
           "notification_events": "Benachrichtigungsereignisse (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
           "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
@@ -56,7 +56,7 @@
           "service": "Für einen Button beispielsweise button.press.",
           "guest_port": "Zugangspunkte können Port und öffentliche URL teilen oder getrennte Ports und URLs verwenden.",
           "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
-          "notification_service": "Wähle einen Gerätedienst. Nicht aufgeführte klassische notify.*-Dienste können manuell eingetragen werden.",
+          "notification_services": "Wähle ein oder mehrere Geräte. Nicht aufgeführte klassische notify.*-Dienste können manuell eingetragen werden.",
           "notification_events": "Wähle aus, bei welchen Ereignissen du benachrichtigt werden möchtest."
         }
       }

@@ -74,7 +74,7 @@ for every additional access point.
 | Home Assistant action | `button.press` | Fixed `domain.service` action |
 | Local guest port | `8922` | Port used only by the guest web server |
 | Public base URL | `https://gate.example.com` | Public HTTPS origin, without a path |
-| Notification device | `Phone (notify.mobile_app_phone)` | Optional dropdown of registered `notify.*` services |
+| Notification devices | `Phone, Tablet` | Optional multi-select of registered `notify.*` services |
 | Notification events | `Pass used` | Optional selection of creation, use, and revocation events |
 | Default validity | `1` | Default validity in hours |
 | Default use limit | `1` | `0` means unlimited until expiry |
@@ -86,11 +86,13 @@ The public base URL is optional. When it is empty, Gate Pass uses an automatic
 local URL. When it is configured, generated links use that URL exactly and do
 not append the local guest port.
 
-The notification device is optional. The dropdown lists the currently
+Notification devices are optional. The multi-select lists the currently
 registered device-specific `notify.*` services and still accepts a manual
-service name as a fallback. You can independently select notifications for
+service name as a fallback. The same message is sent independently to every
+selected device. You can independently select notifications for
 creation, successful use, and revocation. Notification failures never undo or
-consume an additional access action.
+consume an additional access action, and one unavailable device does not block
+the remaining devices.
 
 ### Multiple access points
 
@@ -137,7 +139,7 @@ The integration serves its bundled card from the normal Home Assistant web
 server. In **Settings -> Dashboards -> Resources**, add:
 
 ```text
-/gate-pass/gate-pass-card.js?v=0.4.0-beta.1
+/gate-pass/gate-pass-card.js?v=0.4.0-beta.2
 ```
 
 Select **JavaScript module** as the resource type. Reload the browser or app,

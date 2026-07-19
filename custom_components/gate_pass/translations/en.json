@@ -12,7 +12,7 @@
           "service": "Home Assistant action (domain.service)",
           "guest_port": "Local guest port",
           "public_base_url": "Public base URL (optional)",
-          "notification_service": "Notification device (optional)",
+          "notification_services": "Notification devices (optional)",
           "notification_events": "Notification events (optional)",
           "default_duration_hours": "Default validity (hours)",
           "default_max_uses": "Default use limit (0 = unlimited)"
@@ -21,7 +21,7 @@
           "service": "For a button, use button.press.",
           "guest_port": "Access points may share one port and public URL, or use separate ports and URLs.",
           "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL.",
-          "notification_service": "Select a device service. Unlisted classic notify.* services can be entered manually.",
+          "notification_services": "Select one or more devices. Unlisted classic notify.* services can be entered manually.",
           "notification_events": "Choose which pass lifecycle events should notify you."
         }
       }
@@ -47,7 +47,7 @@
           "service": "Home Assistant action (domain.service)",
           "guest_port": "Local guest port",
           "public_base_url": "Public base URL (optional)",
-          "notification_service": "Notification device (optional)",
+          "notification_services": "Notification devices (optional)",
           "notification_events": "Notification events (optional)",
           "default_duration_hours": "Default validity (hours)",
           "default_max_uses": "Default use limit (0 = unlimited)"
@@ -56,7 +56,7 @@
           "service": "For a button, use button.press.",
           "guest_port": "Access points may share one port and public URL, or use separate ports and URLs.",
           "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL.",
-          "notification_service": "Select a device service. Unlisted classic notify.* services can be entered manually.",
+          "notification_services": "Select one or more devices. Unlisted classic notify.* services can be entered manually.",
           "notification_events": "Choose which pass lifecycle events should notify you."
         }
       }

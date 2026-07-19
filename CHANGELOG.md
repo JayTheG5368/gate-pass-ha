@@ -2,6 +2,17 @@
 
 All notable changes to Gate Pass HA are documented here.
 
+## [0.4.0-beta.2] - 2026-07-19
+
+### Added
+
+- Optional selection of multiple notification devices per access point
+
+### Compatibility
+
+- Existing single-device notification settings are adopted automatically
+- A failed or unavailable notification device does not block other devices
+
 ## [0.4.0-beta.1] - 2026-07-19
 
 ### Added
@@ -69,3 +80,4 @@ All notable changes to Gate Pass HA are documented here.
 [0.3.0]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.3.0
 [0.2.1]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.2.1
 [0.4.0-beta.1]: https://github.com/JayTheG5368/gate-pass-ha/compare/v0.3.0...HEAD
+[0.4.0-beta.2]: https://github.com/JayTheG5368/gate-pass-ha/compare/v0.3.0...HEAD

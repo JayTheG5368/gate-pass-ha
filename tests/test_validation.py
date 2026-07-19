@@ -6,6 +6,7 @@ import voluptuous as vol
 from custom_components.gate_pass.validation import (
     normalize_notification_events,
     normalize_notification_service,
+    normalize_notification_services,
     normalize_public_base_url,
     normalize_service,
 )
@@ -66,6 +67,16 @@ def test_normalize_notification_service(value: str | None, expected: str) -> Non
 def test_reject_invalid_notification_service(value: str) -> None:
     with pytest.raises(vol.Invalid, match="invalid_notification_service"):
         normalize_notification_service(value)
+
+
+def test_normalize_multiple_notification_services() -> None:
+    assert normalize_notification_services(
+        [" Notify.Mobile_App_One ", "notify.mobile_app_two", "notify.mobile_app_one"]
+    ) == ["notify.mobile_app_one", "notify.mobile_app_two"]
+
+
+def test_empty_multiple_notification_services() -> None:
+    assert normalize_notification_services(["", "  "]) == []
 
 
 def test_normalize_notification_events() -> None:
