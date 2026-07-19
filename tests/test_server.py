@@ -6,11 +6,21 @@ from custom_components.gate_pass.const import (
     CONF_ACCESS_NAME,
     CONF_PUBLIC_BASE_URL,
 )
-from custom_components.gate_pass.server import GuestServer
+from custom_components.gate_pass.server import (
+    BRAND_ICON_PATH,
+    GUEST_PAGE_HTML,
+    GuestServer,
+)
 
 
 def _config(name: str, public_url: str = "") -> dict[str, str]:
     return {CONF_ACCESS_NAME: name, CONF_PUBLIC_BASE_URL: public_url}
+
+
+def test_guest_page_uses_bundled_brand_icon() -> None:
+    assert BRAND_ICON_PATH.is_file()
+    assert 'src="/gate-pass/assets/icon.png"' in GUEST_PAGE_HTML
+    assert "&#x25A3;" not in GUEST_PAGE_HTML
 
 
 def test_shared_server_builds_separate_scoped_public_urls() -> None:

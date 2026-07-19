@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -24,6 +25,8 @@ from .pass_manager import PassBusyError, PassManager, PassUnavailableError
 
 _LOGGER = logging.getLogger(__name__)
 
+BRAND_ICON_PATH = Path(__file__).parent / "brand" / "icon.png"
+
 PAGE_HEADERS = {
     "Cache-Control": "no-store",
     "Content-Security-Policy": (
@@ -42,6 +45,11 @@ PAGE_HEADERS = {
     "X-Robots-Tag": "noindex, nofollow, noarchive",
 }
 API_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+ASSET_HEADERS = {
+    "Cache-Control": "public, max-age=86400",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "X-Content-Type-Options": "nosniff",
+}
 
 GUEST_PAGE_HTML = """<!doctype html>
 <html lang="de">
@@ -66,8 +74,8 @@ GUEST_PAGE_HTML = """<!doctype html>
     main { width:min(100%,520px); min-height:100dvh; margin:0 auto; padding:max(24px,env(safe-area-inset-top))
       20px max(24px,env(safe-area-inset-bottom)); display:flex; flex-direction:column; }
     header { display:flex; align-items:center; gap:12px; padding-bottom:24px; border-bottom:1px solid var(--line); }
-    .mark { width:42px; height:42px; border:1px solid var(--line); border-radius:8px;
-      display:grid; place-items:center; color:var(--action); font-size:22px; }
+    .mark { width:44px; height:44px; flex:0 0 auto; }
+    .mark img { display:block; width:100%; height:100%; object-fit:contain; }
     h1 { margin:0; font-size:1.2rem; font-weight:650; }
     .eyebrow { margin:2px 0 0; color:var(--muted); font-size:.82rem; }
     #content { flex:1; display:flex; flex-direction:column; justify-content:center; padding:32px 0; }
@@ -98,7 +106,7 @@ GUEST_PAGE_HTML = """<!doctype html>
 </head>
 <body>
 <main>
-  <header><div class="mark" aria-hidden="true">&#x25A3;</div><div><h1>Gate Pass</h1><p class="eyebrow" id="accessName">Zugang wird geladen</p></div></header>
+  <header><div class="mark" aria-hidden="true"><img src="/gate-pass/assets/icon.png" alt="" width="44" height="44"></div><div><h1>Gate Pass</h1><p class="eyebrow" id="accessName">Zugang wird geladen</p></div></header>
   <section id="content" aria-live="polite">
     <p class="pass-label" id="passLabel"></p>
     <h2 id="actionLabel">Zugang</h2>
@@ -267,6 +275,7 @@ class GuestServer:
     async def async_start(self) -> None:
         """Start the standalone aiohttp server."""
         app = web.Application(client_max_size=16 * 1024)
+        app.router.add_get("/gate-pass/assets/icon.png", self._handle_brand_icon)
         app.router.add_get(
             "/gate-pass/guest/{entry_id}/{pass_id}/{secret}", self._handle_page
         )
@@ -290,6 +299,10 @@ class GuestServer:
         site = web.TCPSite(self._runner, "0.0.0.0", self.port)  # nosec B104
         await site.start()
         _LOGGER.info("Gate Pass guest server listening on port %d", self.port)
+
+    async def _handle_brand_icon(self, _request: web.Request) -> web.FileResponse:
+        """Serve the bundled brand icon without exposing filesystem paths."""
+        return web.FileResponse(BRAND_ICON_PATH, headers=ASSET_HEADERS)
 
     async def async_stop(self) -> None:
         """Stop the guest server."""
