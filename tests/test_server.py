@@ -59,3 +59,32 @@ def test_legacy_route_is_bound_only_to_legacy_owner() -> None:
     )
     assert scoped is not None
     assert scoped.entry_id == "entry-two"
+
+
+def test_browser_origin_accepts_same_host_and_non_browser_requests() -> None:
+    assert GuestServer._check_browser_origin(SimpleNamespace(headers={}))
+    assert GuestServer._check_browser_origin(
+        SimpleNamespace(
+            headers={
+                "Origin": "https://gate.test",
+                "Host": "gate.test",
+                "Sec-Fetch-Site": "same-origin",
+            }
+        )
+    )
+    assert GuestServer._check_browser_origin(
+        SimpleNamespace(headers={"Origin": "http://[::1]:8922", "Host": "[::1]:8922"})
+    )
+
+
+def test_browser_origin_rejects_cross_site_and_malformed_origins() -> None:
+    rejected_headers = (
+        {"Sec-Fetch-Site": "cross-site"},
+        {"Origin": "null", "Host": "gate.test"},
+        {"Origin": "not-a-url", "Host": "gate.test"},
+        {"Origin": "ftp://gate.test", "Host": "gate.test"},
+        {"Origin": "https://evil.test", "Host": "gate.test"},
+        {"Origin": "https://gate.test", "Host": ""},
+    )
+    for headers in rejected_headers:
+        assert not GuestServer._check_browser_origin(SimpleNamespace(headers=headers))

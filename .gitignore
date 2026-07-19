@@ -2,6 +2,7 @@
 node_modules/
 .npm-cache/
 .pip-cache/
+.pip-audit-cache/
 .pytest_cache/
 .ruff_cache/
 __pycache__/

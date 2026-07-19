@@ -2,18 +2,7 @@
 
 All notable changes to Gate Pass HA are documented here.
 
-## [0.4.0-beta.2] - 2026-07-19
-
-### Added
-
-- Optional selection of multiple notification devices per access point
-
-### Compatibility
-
-- Existing single-device notification settings are adopted automatically
-- A failed or unavailable notification device does not block other devices
-
-## [0.4.0-beta.1] - 2026-07-19
+## [0.4.0] - 2026-07-19
 
 ### Added
 
@@ -23,6 +12,7 @@ All notable changes to Gate Pass HA are documented here.
 - Optional mobile-friendly quick presets in the visual card editor
 - Active-pass and last-successful-use Home Assistant sensors per access point
 - Configurable notifications for pass creation, use, and revocation
+- Optional selection of multiple notification devices per access point
 - Administrator-only CSV activity export
 
 ### Changed
@@ -32,9 +22,17 @@ All notable changes to Gate Pass HA are documented here.
 - Management actions accept an optional `config_entry_id` and require it only
   when multiple access points are loaded
 
+### Security
+
+- Reject malformed and cross-origin browser action requests
+- Pin GitHub Actions dependencies to reviewed commits
+- Keep action targets and notification services fixed in administrator settings
+
 ### Compatibility
 
 - Existing single-access configurations and pre-0.4 guest links remain valid
+- Existing single-device notification settings are adopted automatically
+- A failed or unavailable notification device does not block other devices
 - The new capabilities are optional; a single access point behaves as before
 
 ## [0.3.0] - 2026-07-18
@@ -77,7 +75,6 @@ All notable changes to Gate Pass HA are documented here.
 - Pass secrets are stored only as SHA-256 hashes
 - Failed Home Assistant actions no longer consume a pass use
 
+[0.4.0]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.4.0
 [0.3.0]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.3.0
 [0.2.1]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.2.1
-[0.4.0-beta.1]: https://github.com/JayTheG5368/gate-pass-ha/compare/v0.3.0...HEAD
-[0.4.0-beta.2]: https://github.com/JayTheG5368/gate-pass-ha/compare/v0.3.0...HEAD

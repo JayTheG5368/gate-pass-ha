@@ -286,7 +286,8 @@ class GuestServer:
         app.router.add_post("/gate-pass/api/{pass_id}/{secret}/open", self._handle_open)
         self._runner = web.AppRunner(app, access_log=None)
         await self._runner.setup()
-        site = web.TCPSite(self._runner, "0.0.0.0", self.port)
+        # Reverse proxies must be able to reach this dedicated guest port.
+        site = web.TCPSite(self._runner, "0.0.0.0", self.port)  # nosec B104
         await site.start()
         _LOGGER.info("Gate Pass guest server listening on port %d", self.port)
 
@@ -502,8 +503,21 @@ class GuestServer:
         if not origin:
             return True
         try:
-            origin_host = urlsplit(origin).hostname
+            parsed_origin = urlsplit(origin)
+            parsed_host = urlsplit(f"//{request.headers.get('Host', '').strip()}")
         except ValueError:
             return False
-        host_header = request.headers.get("Host", "").split(":", 1)[0].lower()
-        return not origin_host or not host_header or origin_host.lower() == host_header
+        origin_host = parsed_origin.hostname
+        host = parsed_host.hostname
+        if (
+            parsed_origin.scheme.lower() not in {"http", "https"}
+            or not origin_host
+            or parsed_origin.username is not None
+            or parsed_origin.password is not None
+            or parsed_origin.path not in {"", "/"}
+            or parsed_origin.query
+            or parsed_origin.fragment
+            or not host
+        ):
+            return False
+        return origin_host.lower() == host.lower()
