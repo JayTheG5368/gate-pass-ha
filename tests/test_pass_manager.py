@@ -222,3 +222,31 @@ async def test_activity_retains_only_the_latest_200_records() -> None:
     assert len(activity) == 200
     assert activity[0]["label"] == "Gast 204"
     assert activity[-1]["label"] == "Gast 5"
+
+
+@pytest.mark.asyncio
+async def test_creator_only_sees_and_revokes_owned_passes() -> None:
+    storage = MemoryStorage()
+    manager = PassManager(storage)
+    await manager.async_load()
+    alice_pass, _secret = await manager.async_create(
+        label="Alice", duration_hours=1, max_uses=1, created_by_user_id="alice"
+    )
+    bob_pass, _secret = await manager.async_create(
+        label="Bob", duration_hours=1, max_uses=1, created_by_user_id="bob"
+    )
+    await manager.async_create(label="Legacy", duration_hours=1, max_uses=1)
+
+    alice_passes = await manager.async_list_active(owner_user_id="alice")
+    alice_activity = await manager.async_list_activity(owner_user_id="alice")
+
+    assert [item["pass_id"] for item in alice_passes] == [alice_pass["pass_id"]]
+    assert [item["label"] for item in alice_activity] == ["Alice"]
+    assert "created_by_user_id" not in alice_passes[0]
+    assert "created_by_user_id" not in alice_activity[0]
+    assert not await manager.async_revoke(bob_pass["pass_id"], owner_user_id="alice")
+    assert await manager.async_revoke(alice_pass["pass_id"], owner_user_id="alice")
+    assert [item["label"] for item in await manager.async_list_active()] == [
+        "Bob",
+        "Legacy",
+    ]

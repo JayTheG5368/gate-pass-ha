@@ -19,9 +19,13 @@ from homeassistant.core import (
     ServiceResponse,
     SupportsResponse,
 )
-from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
+from homeassistant.exceptions import (
+    ConfigEntryNotReady,
+    ServiceValidationError,
+    Unauthorized,
+    UnknownUser,
+)
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
@@ -59,6 +63,7 @@ from .const import (
 from .csv_export import csv_safe_activity
 from .notifications import async_send_notification
 from .pass_manager import PassManager
+from .permissions import AccessRights, access_rights
 from .server import GuestServer
 from .storage import HomeAssistantPassStorage
 
@@ -75,8 +80,16 @@ class GatePassRuntime:
     server: GuestServer
 
 
+@dataclass(frozen=True)
+class RequestIdentity:
+    """Authenticated Home Assistant service caller."""
+
+    user_id: str | None
+    is_admin: bool
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the card resource and administrator-only services."""
+    """Register the card resource and permission-checked services."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data.setdefault(DATA_RUNTIMES, {})
     domain_data.setdefault(DATA_SERVERS, {})
@@ -89,26 +102,34 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     if hass.services.has_service(DOMAIN, SERVICE_CREATE_PASS):
         return True
 
-    async def async_list_access_points(_call: ServiceCall) -> ServiceResponse:
+    async def async_list_access_points(call: ServiceCall) -> ServiceResponse:
+        identity = await _async_request_identity(hass, call)
         runtimes = _runtimes(hass)
-        return {
-            "access_points": [
+        access_points = []
+        for runtime in sorted(
+            runtimes.values(),
+            key=lambda item: str(item.config[CONF_ACCESS_NAME]).casefold(),
+        ):
+            rights = access_rights(
+                runtime.config, identity.user_id, is_admin=identity.is_admin
+            )
+            if not rights.can_create and not rights.can_manage:
+                continue
+            access_points.append(
                 {
                     "config_entry_id": runtime.entry_id,
                     "access_name": runtime.config[CONF_ACCESS_NAME],
                     "action_label": runtime.config[CONF_ACTION_LABEL],
                     "guest_port": runtime.config[CONF_GUEST_PORT],
                     "public_base_url": runtime.config.get(CONF_PUBLIC_BASE_URL, ""),
+                    "permissions": rights.as_dict(),
                 }
-                for runtime in sorted(
-                    runtimes.values(),
-                    key=lambda item: str(item.config[CONF_ACCESS_NAME]).casefold(),
-                )
-            ]
-        }
+            )
+        return {"access_points": access_points}
 
     async def async_create_pass(call: ServiceCall) -> ServiceResponse:
         runtime = _get_runtime(hass, call)
+        identity, _rights = await _async_require_access(hass, call, runtime)
         duration = float(
             call.data.get(
                 ATTR_DURATION_HOURS,
@@ -126,6 +147,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             duration_hours=duration,
             max_uses=max_uses,
             valid_from=call.data.get(ATTR_VALID_FROM),
+            created_by_user_id=identity.user_id,
         )
         guest_url = runtime.server.build_guest_url(
             runtime.entry_id, guest_pass["pass_id"], secret
@@ -150,22 +172,31 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def async_list_passes(call: ServiceCall) -> ServiceResponse:
         runtime = _get_runtime(hass, call)
+        _identity, rights = await _async_require_access(hass, call, runtime)
         return {
             "config_entry_id": runtime.entry_id,
             "access_name": runtime.config[CONF_ACCESS_NAME],
-            "passes": await runtime.manager.async_list_active(),
+            "passes": await runtime.manager.async_list_active(
+                owner_user_id=rights.owner_user_id
+            ),
+            "permissions": rights.as_dict(),
         }
 
     async def async_list_activity(call: ServiceCall) -> ServiceResponse:
         runtime = _get_runtime(hass, call)
+        _identity, rights = await _async_require_access(hass, call, runtime)
         return {
             "config_entry_id": runtime.entry_id,
             "access_name": runtime.config[CONF_ACCESS_NAME],
-            "activity": await runtime.manager.async_list_activity(),
+            "activity": await runtime.manager.async_list_activity(
+                owner_user_id=rights.owner_user_id
+            ),
+            "permissions": rights.as_dict(),
         }
 
     async def async_export_activity(call: ServiceCall) -> ServiceResponse:
         runtime = _get_runtime(hass, call)
+        await _async_require_access(hass, call, runtime, require_manage=True)
         output = StringIO(newline="")
         fieldnames = (
             "event_type",
@@ -189,6 +220,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def async_clear_activity(call: ServiceCall) -> ServiceResponse:
         runtime = _get_runtime(hass, call)
+        await _async_require_access(hass, call, runtime, require_manage=True)
         count = await runtime.manager.async_clear_activity()
         event_data = _event_data(runtime, count=count)
         hass.bus.async_fire(EVENT_ACTIVITY_CLEARED, event_data)
@@ -197,13 +229,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def async_revoke_pass(call: ServiceCall) -> ServiceResponse:
         runtime = _get_runtime(hass, call)
+        _identity, rights = await _async_require_access(hass, call, runtime)
         pass_id = str(call.data[ATTR_PASS_ID])
-        active_passes = await runtime.manager.async_list_active()
+        active_passes = await runtime.manager.async_list_active(
+            owner_user_id=rights.owner_user_id
+        )
         label = next(
             (item["label"] for item in active_passes if item["pass_id"] == pass_id),
             pass_id,
         )
-        revoked = await runtime.manager.async_revoke(pass_id)
+        revoked = await runtime.manager.async_revoke(
+            pass_id, owner_user_id=rights.owner_user_id
+        )
         if not revoked:
             raise ServiceValidationError("Pass not found")
         event_data = _event_data(runtime, pass_id=pass_id)
@@ -215,6 +252,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def async_revoke_all(call: ServiceCall) -> ServiceResponse:
         runtime = _get_runtime(hass, call)
+        await _async_require_access(hass, call, runtime, require_manage=True)
         count = await runtime.manager.async_revoke_all()
         event_data = _event_data(runtime, all=True, count=count)
         hass.bus.async_fire(EVENT_PASS_REVOKED, event_data)
@@ -224,16 +262,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         return response if call.return_response else None
 
     runtime_field = {vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string}
-    async_register_admin_service(
-        hass,
+    hass.services.async_register(
         DOMAIN,
         SERVICE_LIST_ACCESS_POINTS,
         async_list_access_points,
         schema=vol.Schema({}),
         supports_response=SupportsResponse.ONLY,
     )
-    async_register_admin_service(
-        hass,
+    hass.services.async_register(
         DOMAIN,
         SERVICE_CREATE_PASS,
         async_create_pass,
@@ -257,32 +293,28 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         (SERVICE_LIST_ACTIVITY, async_list_activity),
         (SERVICE_EXPORT_ACTIVITY, async_export_activity),
     ):
-        async_register_admin_service(
-            hass,
+        hass.services.async_register(
             DOMAIN,
             service,
             handler,
             schema=vol.Schema(runtime_field),
             supports_response=SupportsResponse.ONLY,
         )
-    async_register_admin_service(
-        hass,
+    hass.services.async_register(
         DOMAIN,
         SERVICE_CLEAR_ACTIVITY,
         async_clear_activity,
         schema=vol.Schema(runtime_field),
         supports_response=SupportsResponse.OPTIONAL,
     )
-    async_register_admin_service(
-        hass,
+    hass.services.async_register(
         DOMAIN,
         SERVICE_REVOKE_PASS,
         async_revoke_pass,
         schema=vol.Schema({**runtime_field, vol.Required(ATTR_PASS_ID): cv.string}),
         supports_response=SupportsResponse.OPTIONAL,
     )
-    async_register_admin_service(
-        hass,
+    hass.services.async_register(
         DOMAIN,
         SERVICE_REVOKE_ALL,
         async_revoke_all,
@@ -383,6 +415,35 @@ def get_runtime(hass: HomeAssistant, entry_id: str) -> GatePassRuntime:
 
 def _runtimes(hass: HomeAssistant) -> dict[str, GatePassRuntime]:
     return hass.data.get(DOMAIN, {}).get(DATA_RUNTIMES, {})
+
+
+async def _async_request_identity(
+    hass: HomeAssistant, call: ServiceCall
+) -> RequestIdentity:
+    """Resolve a service caller, preserving trusted internal HA calls."""
+    user_id = call.context.user_id
+    if not user_id:
+        return RequestIdentity(None, True)
+    user = await hass.auth.async_get_user(user_id)
+    if user is None:
+        raise UnknownUser(context=call.context)
+    return RequestIdentity(user_id, bool(user.is_admin))
+
+
+async def _async_require_access(
+    hass: HomeAssistant,
+    call: ServiceCall,
+    runtime: GatePassRuntime,
+    *,
+    require_manage: bool = False,
+) -> tuple[RequestIdentity, AccessRights]:
+    """Authorize one service call for the selected access point."""
+    identity = await _async_request_identity(hass, call)
+    rights = access_rights(runtime.config, identity.user_id, is_admin=identity.is_admin)
+    allowed = rights.can_manage if require_manage else rights.can_create
+    if not allowed:
+        raise Unauthorized(context=call.context)
+    return identity, rights
 
 
 def _get_runtime(hass: HomeAssistant, call: ServiceCall) -> GatePassRuntime:

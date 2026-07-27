@@ -19,6 +19,7 @@ from .const import (
     CONF_DEFAULT_MAX_USES,
     CONF_ENTITY_ID,
     CONF_GUEST_PORT,
+    CONF_LINK_CREATOR_USER_IDS,
     CONF_NOTIFICATION_EVENTS,
     CONF_NOTIFICATION_SERVICE,
     CONF_NOTIFICATION_SERVICES,
@@ -40,6 +41,7 @@ from .validation import (
     normalize_service,
     service_domain,
 )
+from .permissions import normalize_user_ids
 
 
 def _notification_service_options(
@@ -99,8 +101,37 @@ def _notification_event_options(hass: HomeAssistant) -> list[selector.SelectOpti
     ]
 
 
+def _link_creator_options(
+    users: list[Any], current: Mapping[str, Any]
+) -> list[selector.SelectOptionDict]:
+    """Build choices for active non-administrator Home Assistant users."""
+    configured = set(normalize_user_ids(current.get(CONF_LINK_CREATOR_USER_IDS, [])))
+    options: list[selector.SelectOptionDict] = []
+    known_ids: set[str] = set()
+    for user in users:
+        user_id = str(getattr(user, "id", "")).strip()
+        if not user_id:
+            continue
+        if user_id not in configured and (
+            not bool(getattr(user, "is_active", False))
+            or bool(getattr(user, "system_generated", False))
+            or bool(getattr(user, "is_admin", False))
+        ):
+            continue
+        name = str(getattr(user, "name", "")).strip() or user_id
+        options.append(selector.SelectOptionDict(value=user_id, label=name))
+        known_ids.add(user_id)
+
+    for user_id in configured - known_ids:
+        options.append(selector.SelectOptionDict(value=user_id, label=user_id))
+    return sorted(options, key=lambda item: str(item["label"]).casefold())
+
+
 def _schema(
-    hass: HomeAssistant, current: Mapping[str, Any] | None = None
+    hass: HomeAssistant,
+    current: Mapping[str, Any] | None = None,
+    *,
+    users: list[Any] | None = None,
 ) -> vol.Schema:
     """Build a frontend-serializable setup/options schema."""
     current = current or {}
@@ -139,6 +170,16 @@ def _schema(
                 CONF_PUBLIC_BASE_URL,
                 default=current.get(CONF_PUBLIC_BASE_URL, ""),
             ): selector.TextSelector(),
+            vol.Optional(
+                CONF_LINK_CREATOR_USER_IDS,
+                default=normalize_user_ids(current.get(CONF_LINK_CREATOR_USER_IDS, [])),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=_link_creator_options(users or [], current),
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    multiple=True,
+                )
+            ),
             vol.Optional(
                 CONF_NOTIFICATION_SERVICES,
                 default=_configured_notification_services(current),
@@ -201,6 +242,9 @@ def _validate(user_input: dict[str, Any]) -> dict[str, Any]:
     result[CONF_PUBLIC_BASE_URL] = normalize_public_base_url(
         result.get(CONF_PUBLIC_BASE_URL, "")
     )
+    result[CONF_LINK_CREATOR_USER_IDS] = normalize_user_ids(
+        result.get(CONF_LINK_CREATOR_USER_IDS, [])
+    )
     result[CONF_NOTIFICATION_SERVICES] = normalize_notification_services(
         result.get(CONF_NOTIFICATION_SERVICES, [])
     )
@@ -253,9 +297,10 @@ class GatePassConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 return self.async_create_entry(title=data[CONF_ACCESS_NAME], data=data)
 
+        users = await self.hass.auth.async_get_users()
         return self.async_show_form(
             step_id="user",
-            data_schema=_schema(self.hass, user_input),
+            data_schema=_schema(self.hass, user_input, users=users),
             errors=errors,
             description_placeholders={"example_url": "https://gate.example.com"},
         )
@@ -299,9 +344,10 @@ class GatePassOptionsFlow(OptionsFlow):
                 return self.async_create_entry(title="", data=options)
             current = user_input
 
+        users = await self.hass.auth.async_get_users()
         return self.async_show_form(
             step_id="init",
-            data_schema=_schema(self.hass, current),
+            data_schema=_schema(self.hass, current, users=users),
             errors=errors,
             description_placeholders={"example_url": "https://gate.example.com"},
             last_step=True,

@@ -12,6 +12,7 @@
           "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
+          "link_creator_user_ids": "Erlaubte Link-Ersteller (optional)",
           "notification_services": "Benachrichtigungsgeräte (optional)",
           "notification_events": "Benachrichtigungsereignisse (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
@@ -21,6 +22,7 @@
           "service": "Für einen Button beispielsweise button.press.",
           "guest_port": "Zugangspunkte können Port und öffentliche URL teilen oder getrennte Ports und URLs verwenden.",
           "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
+          "link_creator_user_ids": "Ausgewählte Benutzer ohne Administratorrechte dürfen für diesen Zugangspunkt nur eigene Links erstellen, anzeigen und widerrufen.",
           "notification_services": "Wähle ein oder mehrere Geräte. Nicht aufgeführte klassische notify.*-Dienste können manuell eingetragen werden.",
           "notification_events": "Wähle aus, bei welchen Ereignissen du benachrichtigt werden möchtest."
         }
@@ -47,6 +49,7 @@
           "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
+          "link_creator_user_ids": "Erlaubte Link-Ersteller (optional)",
           "notification_services": "Benachrichtigungsgeräte (optional)",
           "notification_events": "Benachrichtigungsereignisse (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
@@ -56,6 +59,7 @@
           "service": "Für einen Button beispielsweise button.press.",
           "guest_port": "Zugangspunkte können Port und öffentliche URL teilen oder getrennte Ports und URLs verwenden.",
           "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
+          "link_creator_user_ids": "Ausgewählte Benutzer ohne Administratorrechte dürfen für diesen Zugangspunkt nur eigene Links erstellen, anzeigen und widerrufen.",
           "notification_services": "Wähle ein oder mehrere Geräte. Nicht aufgeführte klassische notify.*-Dienste können manuell eingetragen werden.",
           "notification_events": "Wähle aus, bei welchen Ereignissen du benachrichtigt werden möchtest."
         }

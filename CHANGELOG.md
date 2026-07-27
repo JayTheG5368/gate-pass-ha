@@ -2,6 +2,19 @@
 
 All notable changes to Gate Pass HA are documented here.
 
+## Unreleased
+
+### Added
+
+- Optional per-access-point selection of non-administrator link creators
+- Ownership tracking so authorized users see and revoke only their own passes
+
+### Security
+
+- Keep bulk revocation, full activity access, CSV export, and activity clearing
+  restricted to Home Assistant administrators
+- Exclude internal Home Assistant user IDs from pass and activity responses
+
 ## [0.4.0] - 2026-07-19
 
 ### Added

@@ -89,6 +89,7 @@ class PassManager:
         duration_hours: float,
         max_uses: int,
         valid_from: datetime | None = None,
+        created_by_user_id: str | None = None,
     ) -> tuple[dict[str, Any], str]:
         """Create a pass and return its safe data plus one-time secret."""
         if duration_hours <= 0:
@@ -113,6 +114,7 @@ class PassManager:
             "use_count": 0,
             "active": True,
             "last_used_at": None,
+            "created_by_user_id": created_by_user_id,
         }
 
         async with self._lock:
@@ -174,7 +176,9 @@ class PassManager:
         async with self._lock:
             self._reserved.discard(pass_id)
 
-    async def async_list_active(self) -> list[dict[str, Any]]:
+    async def async_list_active(
+        self, *, owner_user_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """Return active, unexpired passes without secrets or hashes."""
         changed = False
         async with self._lock:
@@ -188,12 +192,23 @@ class PassManager:
                 self._safe(record)
                 for record in self._passes.values()
                 if record.get("active")
+                and (
+                    owner_user_id is None
+                    or record.get("created_by_user_id") == owner_user_id
+                )
             ]
 
-    async def async_list_activity(self) -> list[dict[str, Any]]:
+    async def async_list_activity(
+        self, *, owner_user_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """Return the newest persistent activity records first."""
         async with self._lock:
-            return [dict(item) for item in reversed(self._activity)]
+            return [
+                self._safe_activity(item)
+                for item in reversed(self._activity)
+                if owner_user_id is None
+                or item.get("created_by_user_id") == owner_user_id
+            ]
 
     async def async_clear_activity(self) -> int:
         """Clear all persistent activity records and return the removed count."""
@@ -204,11 +219,16 @@ class PassManager:
                 await self._async_save_locked()
             return count
 
-    async def async_revoke(self, pass_id: str) -> bool:
+    async def async_revoke(
+        self, pass_id: str, *, owner_user_id: str | None = None
+    ) -> bool:
         """Revoke one pass."""
         async with self._lock:
             record = self._passes.get(pass_id)
-            if record is None:
+            if record is None or (
+                owner_user_id is not None
+                and record.get("created_by_user_id") != owner_user_id
+            ):
                 return False
             if record.get("active"):
                 record["active"] = False
@@ -313,6 +333,7 @@ class PassManager:
                 "label": str(record.get("label", "Gast")),
                 "use_count": int(record.get("use_count", 0)),
                 "max_uses": int(record.get("max_uses", 0)),
+                "created_by_user_id": record.get("created_by_user_id"),
             }
         )
         if len(self._activity) > ACTIVITY_LIMIT:
@@ -324,4 +345,14 @@ class PassManager:
 
     @staticmethod
     def _safe(record: dict[str, Any]) -> dict[str, Any]:
-        return {key: value for key, value in record.items() if key != "secret_hash"}
+        return {
+            key: value
+            for key, value in record.items()
+            if key not in {"secret_hash", "created_by_user_id"}
+        }
+
+    @staticmethod
+    def _safe_activity(record: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: value for key, value in record.items() if key != "created_by_user_id"
+        }

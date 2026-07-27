@@ -74,6 +74,7 @@ for every additional access point.
 | Home Assistant action | `button.press` | Fixed `domain.service` action |
 | Local guest port | `8922` | Port used only by the guest web server |
 | Public base URL | `https://gate.example.com` | Public HTTPS origin, without a path |
+| Allowed link creators | `Family member` | Optional non-admin users who may manage their own links |
 | Notification devices | `Phone, Tablet` | Optional multi-select of registered `notify.*` services |
 | Notification events | `Pass used` | Optional selection of creation, use, and revocation events |
 | Default validity | `1` | Default validity in hours |
@@ -85,6 +86,13 @@ a `button.*` entity or `cover.open_cover` with a `cover.*` entity.
 The public base URL is optional. When it is empty, Gate Pass uses an automatic
 local URL. When it is configured, generated links use that URL exactly and do
 not append the local guest port.
+
+Allowed link creators are configured separately for every access point. The
+field is empty by default, preserving administrator-only access. A selected
+non-admin user can create, list, and revoke only links created by that same Home
+Assistant user. Administrators can still manage every link and the complete
+activity history. Existing links without owner information remain
+administrator-only.
 
 Notification devices are optional. The multi-select lists the currently
 registered device-specific `notify.*` services and still accepts a manual
@@ -139,7 +147,7 @@ The integration serves its bundled card from the normal Home Assistant web
 server. In **Settings -> Dashboards -> Resources**, add:
 
 ```text
-/gate-pass/gate-pass-card.js?v=0.4.0
+/gate-pass/gate-pass-card.js?v=0.5.0-beta.1
 ```
 
 Select **JavaScript module** as the resource type. Reload the browser or app,
@@ -174,7 +182,12 @@ version and reload the frontend to avoid a cached card bundle.
 
 ## Home Assistant actions
 
-All Gate Pass actions require a Home Assistant administrator.
+Gate Pass actions enforce the permissions configured for the selected access
+point. Administrators and trusted internal Home Assistant calls retain full
+access. Allowed non-admin link creators can call `list_access_points`,
+`create_pass`, `list_passes`, `list_activity`, and `revoke_pass`, with results
+restricted to their own links. Exporting or clearing activity and revoking all
+links remain administrator-only.
 
 | Action | Purpose |
 |---|---|
@@ -208,8 +221,9 @@ limit, or is revoked. Use HTTPS, short validity periods, one-use passes where
 possible, and avoid sharing links through systems that log or preview URLs.
 
 The activity history keeps the latest 200 records. It does not store guest URL
-secrets, IP addresses, or browser identifiers. Only Home Assistant
-administrators can read, export, or clear it.
+secrets, IP addresses, or browser identifiers. Allowed link creators can read
+only activity associated with their own links. Only Home Assistant
+administrators can read the complete history, export it, or clear it.
 
 See [SECURITY.md](SECURITY.md) for deployment guidance and vulnerability
 reporting.

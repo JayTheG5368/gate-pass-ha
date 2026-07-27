@@ -35,9 +35,11 @@ Home Assistant tokens, credentials, hostnames, and IP addresses.
 ## Trust boundaries
 
 The configured entity and Home Assistant action are stored server-side and
-cannot be selected by a guest. Creating, listing, and revoking passes requires a
-Home Assistant administrator. The complete link is nevertheless a bearer
-credential: possession of the URL grants its remaining access.
+cannot be selected by a guest. Administrators can optionally authorize selected
+Home Assistant users per access point. Those users can create, list, and revoke
+only their own passes; bulk management and complete history access remain
+administrator-only. The complete link is nevertheless a bearer credential:
+possession of the URL grants its remaining access.
 
 Gate Pass HA does not provide identity verification, an internal firewall, or
 network-level rate limiting. Those controls belong at the reverse proxy and

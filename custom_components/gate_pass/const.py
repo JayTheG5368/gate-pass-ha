@@ -10,6 +10,7 @@ CONF_ENTITY_ID: Final = "entity_id"
 CONF_SERVICE: Final = "service"
 CONF_GUEST_PORT: Final = "guest_port"
 CONF_PUBLIC_BASE_URL: Final = "public_base_url"
+CONF_LINK_CREATOR_USER_IDS: Final = "link_creator_user_ids"
 # Kept as a read-only fallback for configurations created before 0.4.0-beta.2.
 CONF_NOTIFICATION_SERVICE: Final = "notification_service"
 CONF_NOTIFICATION_SERVICES: Final = "notification_services"

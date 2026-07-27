@@ -110,6 +110,7 @@ class GatePassCard extends LitElement {
     _selectedAccessPoint: { state: true },
     _draftDuration: { state: true },
     _draftUses: { state: true },
+    _permissions: { state: true },
   };
 
   constructor() {
@@ -130,6 +131,7 @@ class GatePassCard extends LitElement {
     this._selectedAccessPoint = '';
     this._draftDuration = null;
     this._draftUses = null;
+    this._permissions = { can_create: false, can_manage: false, can_revoke: false };
     this._draftLabel = null;
     this._eventUnsubs = [];
     this._clearTimer = null;
@@ -189,6 +191,11 @@ class GatePassCard extends LitElement {
     else if (!available.has(this._selectedAccessPoint)) {
       this._selectedAccessPoint = this._accessPoints[0]?.config_entry_id || '';
     }
+    const selected = this._accessPoints.find(
+      (item) => item.config_entry_id === this._selectedAccessPoint,
+    );
+    this._permissions = selected?.permissions
+      || { can_create: false, can_manage: false, can_revoke: false };
   }
 
   _serviceData(extra = {}) {
@@ -238,6 +245,9 @@ class GatePassCard extends LitElement {
       ]);
       this._passes = passesResult?.response?.passes || [];
       this._activity = activityResult?.response?.activity || [];
+      this._permissions = passesResult?.response?.permissions
+        || activityResult?.response?.permissions
+        || this._permissions;
       this._accessName = passesResult?.response?.access_name || activityResult?.response?.access_name || '';
       this._error = '';
     } catch (error) {
@@ -480,6 +490,7 @@ class GatePassCard extends LitElement {
   }
 
   _applyPreset(preset) {
+    if (!this._permissions.can_create) return;
     this._view = 'active';
     this._showForm = true;
     this._draftLabel = this._labelFromTemplate(preset.label || preset.name) || this._defaultLabel();
@@ -491,6 +502,7 @@ class GatePassCard extends LitElement {
   }
 
   _toggleForm() {
+    if (!this._permissions.can_create) return;
     this._view = 'active';
     this._showForm = !this._showForm;
     if (this._showForm) {
@@ -531,7 +543,7 @@ class GatePassCard extends LitElement {
           <div class="title-block"><ha-icon icon=${this._config?.icon || 'mdi:garage-variant'}></ha-icon><div><h2>${this._config?.title || this._accessName || t.title}</h2>${this._config?.title && this._accessName ? html`<p>${this._accessName}</p>` : ''}</div></div>
           <div class="header-actions">
             <ha-icon-button title=${t.refresh} @click=${this._refreshAll} .disabled=${this._loading}><ha-icon icon="mdi:refresh"></ha-icon></ha-icon-button>
-            <ha-button appearance="accent" @click=${this._toggleForm}><ha-icon icon="mdi:plus" slot="start"></ha-icon>${t.create}</ha-button>
+            ${this._permissions.can_create ? html`<ha-button appearance="accent" @click=${this._toggleForm}><ha-icon icon="mdi:plus" slot="start"></ha-icon>${t.create}</ha-button>` : ''}
           </div>
         </header>
 
@@ -541,7 +553,7 @@ class GatePassCard extends LitElement {
           </select></label>
         ` : ''}
 
-        ${this._config?.presets?.length ? html`
+        ${this._permissions.can_create && this._config?.presets?.length ? html`
           <div class="presets"><span>${t.presets}</span><div>
             ${this._config.presets.map((preset) => html`<button type="button" @click=${() => this._applyPreset(preset)}>${preset.name || preset.label || t.create}</button>`)}
           </div></div>
@@ -563,12 +575,12 @@ class GatePassCard extends LitElement {
 
         ${this._view === 'active' ? html`
           <section>
-            <div class="section-heading"><h3>${t.active}</h3>${this._passes.length ? html`<ha-button class="danger" @click=${this._revokeAll}>${t.revokeAll}</ha-button>` : ''}</div>
+            <div class="section-heading"><h3>${t.active}</h3>${this._permissions.can_manage && this._passes.length ? html`<ha-button class="danger" @click=${this._revokeAll}>${t.revokeAll}</ha-button>` : ''}</div>
             ${this._passes.length ? this._passes.map((pass) => this._renderPass(pass, t)) : html`<div class="empty"><ha-icon icon="mdi:ticket-outline"></ha-icon><span>${t.noPasses}</span></div>`}
           </section>
         ` : html`
           <section>
-            <div class="section-heading"><h3>${t.activity}</h3>${this._activity.length ? html`<div class="section-actions"><ha-button @click=${this._exportActivity}><ha-icon icon="mdi:download" slot="start"></ha-icon>${t.exportActivity}</ha-button><ha-button class="danger" @click=${this._clearActivity}>${t.clearActivity}</ha-button></div>` : ''}</div>
+            <div class="section-heading"><h3>${t.activity}</h3>${this._permissions.can_manage && this._activity.length ? html`<div class="section-actions"><ha-button @click=${this._exportActivity}><ha-icon icon="mdi:download" slot="start"></ha-icon>${t.exportActivity}</ha-button><ha-button class="danger" @click=${this._clearActivity}>${t.clearActivity}</ha-button></div>` : ''}</div>
             ${this._activity.length ? this._activity.map((item) => this._renderActivity(item, t)) : html`<div class="empty"><ha-icon icon="mdi:history"></ha-icon><span>${t.noActivity}</span></div>`}
           </section>
         `}
@@ -637,7 +649,7 @@ class GatePassCard extends LitElement {
       <div class="pass-row">
         <div class="pass-icon"><ha-icon icon="mdi:ticket-confirmation-outline"></ha-icon></div>
         <div class="pass-info"><strong>${pass.label}</strong><span>${timing} · ${limit} ${t.used}</span></div>
-        <ha-icon-button title=${t.revoke} @click=${() => this._revoke(pass.pass_id, pass.label)} .disabled=${this._loading}><ha-icon icon="mdi:delete-outline"></ha-icon></ha-icon-button>
+        ${this._permissions.can_revoke ? html`<ha-icon-button title=${t.revoke} @click=${() => this._revoke(pass.pass_id, pass.label)} .disabled=${this._loading}><ha-icon icon="mdi:delete-outline"></ha-icon></ha-icon-button>` : ''}
       </div>
     `;
   }
