@@ -147,7 +147,7 @@ The integration serves its bundled card from the normal Home Assistant web
 server. In **Settings -> Dashboards -> Resources**, add:
 
 ```text
-/gate-pass/gate-pass-card.js?v=0.5.0-beta.1
+/gate-pass/gate-pass-card.js?v=0.5.0
 ```
 
 Select **JavaScript module** as the resource type. Reload the browser or app,

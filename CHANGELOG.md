@@ -2,7 +2,7 @@
 
 All notable changes to Gate Pass HA are documented here.
 
-## Unreleased
+## [0.5.0] - 2026-07-27
 
 ### Added
 
@@ -88,6 +88,7 @@ All notable changes to Gate Pass HA are documented here.
 - Pass secrets are stored only as SHA-256 hashes
 - Failed Home Assistant actions no longer consume a pass use
 
+[0.5.0]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.5.0
 [0.4.0]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.4.0
 [0.3.0]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.3.0
 [0.2.1]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.2.1
