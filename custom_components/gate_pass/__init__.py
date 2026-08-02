@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 from dataclasses import dataclass
 from io import StringIO
@@ -43,6 +44,7 @@ from .const import (
     CONF_GUEST_PORT,
     CONF_PUBLIC_BASE_URL,
     DATA_RUNTIMES,
+    DATA_SERVER_LOCKS,
     DATA_SERVERS,
     DEFAULT_DURATION_HOURS,
     DEFAULT_MAX_USES,
@@ -63,7 +65,12 @@ from .const import (
 from .csv_export import csv_safe_activity
 from .notifications import async_send_notification
 from .pass_manager import PassManager
-from .permissions import AccessRights, access_rights
+from .permissions import (
+    AccessRights,
+    access_rights,
+    creation_limits,
+    validate_creation_request,
+)
 from .server import GuestServer
 from .storage import HomeAssistantPassStorage
 
@@ -93,6 +100,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data.setdefault(DATA_RUNTIMES, {})
     domain_data.setdefault(DATA_SERVERS, {})
+    domain_data.setdefault(DATA_SERVER_LOCKS, {})
 
     frontend_path = Path(__file__).parent / "frontend" / "gate-pass-card.js"
     await hass.http.async_register_static_paths(
@@ -123,6 +131,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     "guest_port": runtime.config[CONF_GUEST_PORT],
                     "public_base_url": runtime.config.get(CONF_PUBLIC_BASE_URL, ""),
                     "permissions": rights.as_dict(),
+                    "creation_limits": creation_limits(
+                        runtime.config, is_admin=identity.is_admin
+                    ).as_dict(),
                 }
             )
         return {"access_points": access_points}
@@ -142,6 +153,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 runtime.config.get(CONF_DEFAULT_MAX_USES, DEFAULT_MAX_USES),
             )
         )
+        limits = creation_limits(runtime.config, is_admin=identity.is_admin)
+        try:
+            validate_creation_request(
+                limits, duration_hours=duration, max_uses=max_uses
+            )
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
         guest_pass, secret = await runtime.manager.async_create(
             label=str(call.data.get(ATTR_LABEL, "Gast")),
             duration_hours=duration,
@@ -329,6 +347,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data = hass.data[DOMAIN]
     runtimes: dict[str, GatePassRuntime] = domain_data[DATA_RUNTIMES]
     servers: dict[int, GuestServer] = domain_data[DATA_SERVERS]
+    server_locks: dict[int, asyncio.Lock] = domain_data[DATA_SERVER_LOCKS]
     merged_config = {**entry.data, **entry.options}
 
     entries = hass.config_entries.async_entries(DOMAIN)
@@ -339,22 +358,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await manager.async_load()
 
     port = int(merged_config[CONF_GUEST_PORT])
-    server = servers.get(port)
-    created_server = server is None
-    if server is None:
-        server = GuestServer(hass, port)
-        servers[port] = server
-    server.register(entry.entry_id, manager, merged_config, legacy=legacy_owner)
-    if created_server:
-        try:
-            await server.async_start()
-        except OSError as err:
-            server.unregister(entry.entry_id)
-            servers.pop(port, None)
-            await server.async_stop()
-            raise ConfigEntryNotReady(
-                f"Could not bind Gate Pass guest port: {err}"
-            ) from err
+    server_lock = server_locks.setdefault(port, asyncio.Lock())
+    async with server_lock:
+        server = servers.get(port)
+        if server is None:
+            server = GuestServer(hass, port)
+            server.register(
+                entry.entry_id, manager, merged_config, legacy=legacy_owner
+            )
+            try:
+                await server.async_start()
+            except OSError as err:
+                server.unregister(entry.entry_id)
+                await server.async_stop()
+                raise ConfigEntryNotReady(
+                    f"Could not bind Gate Pass guest port: {err}"
+                ) from err
+            servers[port] = server
+        else:
+            server.register(
+                entry.entry_id, manager, merged_config, legacy=legacy_owner
+            )
 
     runtime = GatePassRuntime(entry.entry_id, merged_config, manager, server)
     runtimes[entry.entry_id] = runtime
@@ -362,16 +386,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except Exception:
         runtimes.pop(entry.entry_id, None)
-        server.unregister(entry.entry_id)
-        if server.empty:
-            servers.pop(port, None)
-            await server.async_stop()
+        async with server_lock:
+            server.unregister(entry.entry_id)
+            if server.empty:
+                servers.pop(port, None)
+                await server.async_stop()
         raise
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     async def _on_stop(_event: Any) -> None:
-        await server.async_stop()
+        async with server_lock:
+            await server.async_stop()
 
     entry.async_on_unload(
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _on_stop)
@@ -389,11 +415,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not isinstance(runtime, GatePassRuntime):
         return True
 
-    runtime.server.unregister(entry.entry_id)
-    if runtime.server.empty:
-        port = int(runtime.config[CONF_GUEST_PORT])
-        domain_data.get(DATA_SERVERS, {}).pop(port, None)
-        await runtime.server.async_stop()
+    port = int(runtime.config[CONF_GUEST_PORT])
+    server_locks: dict[int, asyncio.Lock] = domain_data.get(DATA_SERVER_LOCKS, {})
+    server_lock = server_locks.setdefault(port, asyncio.Lock())
+    async with server_lock:
+        runtime.server.unregister(entry.entry_id)
+        if runtime.server.empty:
+            domain_data.get(DATA_SERVERS, {}).pop(port, None)
+            await runtime.server.async_stop()
     return True
 
 

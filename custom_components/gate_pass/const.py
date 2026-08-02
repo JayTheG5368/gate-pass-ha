@@ -11,6 +11,10 @@ CONF_SERVICE: Final = "service"
 CONF_GUEST_PORT: Final = "guest_port"
 CONF_PUBLIC_BASE_URL: Final = "public_base_url"
 CONF_LINK_CREATOR_USER_IDS: Final = "link_creator_user_ids"
+CONF_CREATOR_MAX_DURATION_HOURS: Final = "creator_max_duration_hours"
+CONF_CREATOR_MAX_USES: Final = "creator_max_uses"
+CONF_CREATOR_ALLOW_UNLIMITED_USES: Final = "creator_allow_unlimited_uses"
+CONF_EXPOSE_LAST_USED_LABEL: Final = "expose_last_used_label"
 # Kept as a read-only fallback for configurations created before 0.4.0-beta.2.
 CONF_NOTIFICATION_SERVICE: Final = "notification_service"
 CONF_NOTIFICATION_SERVICES: Final = "notification_services"
@@ -24,6 +28,12 @@ DEFAULT_SERVICE: Final = "button.press"
 DEFAULT_GUEST_PORT: Final = 8922
 DEFAULT_DURATION_HOURS: Final = 1.0
 DEFAULT_MAX_USES: Final = 1
+MAX_DURATION_HOURS: Final = 720.0
+MAX_USES: Final = 1000
+DEFAULT_CREATOR_MAX_DURATION_HOURS: Final = MAX_DURATION_HOURS
+DEFAULT_CREATOR_MAX_USES: Final = MAX_USES
+DEFAULT_CREATOR_ALLOW_UNLIMITED_USES: Final = True
+DEFAULT_EXPOSE_LAST_USED_LABEL: Final = False
 DEFAULT_NOTIFICATION_EVENTS: Final = ["used"]
 NOTIFICATION_EVENTS: Final = ("created", "used", "revoked")
 
@@ -57,3 +67,4 @@ PLATFORMS: Final = ("sensor",)
 
 DATA_RUNTIMES: Final = "runtimes"
 DATA_SERVERS: Final = "servers"
+DATA_SERVER_LOCKS: Final = "server_locks"

@@ -98,3 +98,30 @@ def test_browser_origin_rejects_cross_site_and_malformed_origins() -> None:
     )
     for headers in rejected_headers:
         assert not GuestServer._check_browser_origin(SimpleNamespace(headers=headers))
+
+
+def test_browser_origin_rejects_different_port() -> None:
+    assert not GuestServer._check_browser_origin(
+        SimpleNamespace(
+            headers={
+                "Origin": "https://gate.test:444",
+                "Host": "gate.test",
+                "Sec-Fetch-Site": "same-origin",
+            }
+        )
+    )
+
+
+def test_browser_origin_matches_configured_public_origin() -> None:
+    request = SimpleNamespace(
+        headers={
+            "Origin": "https://gate.test",
+            "Host": "internal-proxy:8922",
+            "Sec-Fetch-Site": "same-origin",
+        }
+    )
+    config = _config("Garage", "https://gate.test")
+
+    assert GuestServer._check_browser_origin(request, config)
+    request.headers["Origin"] = "http://gate.test"
+    assert not GuestServer._check_browser_origin(request, config)

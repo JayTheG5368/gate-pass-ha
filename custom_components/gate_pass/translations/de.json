@@ -9,22 +9,38 @@
           "access_name": "Name des Zugangspunkts",
           "action_label": "Beschriftung der Gast-Schaltfläche",
           "entity_id": "Ziel-Entity",
-          "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
           "link_creator_user_ids": "Erlaubte Link-Ersteller (optional)",
+          "creator_max_duration_hours": "Maximale Gültigkeit für Ersteller (Stunden)",
+          "creator_max_uses": "Maximales Nutzungslimit für Ersteller",
+          "creator_allow_unlimited_uses": "Unbegrenzte Links für Ersteller erlauben",
+          "expose_last_used_label": "Letzten Link-Namen im Sensor anzeigen",
           "notification_services": "Benachrichtigungsgeräte (optional)",
           "notification_events": "Benachrichtigungsereignisse (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
           "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
         },
         "data_description": {
-          "service": "Für einen Button beispielsweise button.press.",
           "guest_port": "Zugangspunkte können Port und öffentliche URL teilen oder getrennte Ports und URLs verwenden.",
           "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
           "link_creator_user_ids": "Ausgewählte Benutzer ohne Administratorrechte dürfen für diesen Zugangspunkt nur eigene Links erstellen, anzeigen und widerrufen.",
+          "creator_max_duration_hours": "Maximale Gültigkeit, die ein ausgewählter Benutzer ohne Administratorrechte vergeben darf. Administratoren sind nicht betroffen.",
+          "creator_max_uses": "Maximales endliches Nutzungslimit für ausgewählte Benutzer ohne Administratorrechte.",
+          "creator_allow_unlimited_uses": "Wenn deaktiviert, können ausgewählte Benutzer ohne Administratorrechte keine unbegrenzt nutzbaren Links erstellen.",
+          "expose_last_used_label": "Standardmäßig deaktiviert. Bei Aktivierung ist der letzte Link-Name für alle Benutzer mit Leserechten auf den Sensor sichtbar.",
           "notification_services": "Wähle ein oder mehrere Geräte. Nicht aufgeführte klassische notify.*-Dienste können manuell eingetragen werden.",
           "notification_events": "Wähle aus, bei welchen Ereignissen du benachrichtigt werden möchtest."
+        }
+      },
+      "action": {
+        "title": "Gast-Aktion auswählen",
+        "description": "{entity_id} wurde als {domain}-Entity erkannt. Wähle genau die Aktion, die Gäste auslösen dürfen.",
+        "data": {
+          "service": "Gast-Aktion"
+        },
+        "data_description": {
+          "service": "Es werden nur Aktionen angeboten, die zur Domain der ausgewählten Entity passen."
         }
       }
     },
@@ -34,6 +50,7 @@
       "invalid_notification_events": "Wähle nur unterstützte Benachrichtigungsereignisse.",
       "invalid_service": "Die Aktion muss das Format domain.service haben.",
       "domain_mismatch": "Entity und Aktion müssen dieselbe Domain verwenden.",
+      "no_compatible_service": "Für diese Entity ist derzeit keine kompatible Aktion verfügbar, die nur eine Entity benötigt.",
       "invalid_config": "Prüfe die eingegebenen Werte."
     }
   },
@@ -46,22 +63,38 @@
           "access_name": "Name des Zugangspunkts",
           "action_label": "Beschriftung der Gast-Schaltfläche",
           "entity_id": "Ziel-Entity",
-          "service": "Home-Assistant-Aktion (domain.service)",
           "guest_port": "Lokaler Gast-Port",
           "public_base_url": "Öffentliche Basis-URL (optional)",
           "link_creator_user_ids": "Erlaubte Link-Ersteller (optional)",
+          "creator_max_duration_hours": "Maximale Gültigkeit für Ersteller (Stunden)",
+          "creator_max_uses": "Maximales Nutzungslimit für Ersteller",
+          "creator_allow_unlimited_uses": "Unbegrenzte Links für Ersteller erlauben",
+          "expose_last_used_label": "Letzten Link-Namen im Sensor anzeigen",
           "notification_services": "Benachrichtigungsgeräte (optional)",
           "notification_events": "Benachrichtigungsereignisse (optional)",
           "default_duration_hours": "Standard-Gültigkeit (Stunden)",
           "default_max_uses": "Standard-Nutzungslimit (0 = unbegrenzt)"
         },
         "data_description": {
-          "service": "Für einen Button beispielsweise button.press.",
           "guest_port": "Zugangspunkte können Port und öffentliche URL teilen oder getrennte Ports und URLs verwenden.",
           "public_base_url": "Beispielsweise {example_url}. Leer lassen für eine automatisch erzeugte lokale URL.",
           "link_creator_user_ids": "Ausgewählte Benutzer ohne Administratorrechte dürfen für diesen Zugangspunkt nur eigene Links erstellen, anzeigen und widerrufen.",
+          "creator_max_duration_hours": "Maximale Gültigkeit, die ein ausgewählter Benutzer ohne Administratorrechte vergeben darf. Administratoren sind nicht betroffen.",
+          "creator_max_uses": "Maximales endliches Nutzungslimit für ausgewählte Benutzer ohne Administratorrechte.",
+          "creator_allow_unlimited_uses": "Wenn deaktiviert, können ausgewählte Benutzer ohne Administratorrechte keine unbegrenzt nutzbaren Links erstellen.",
+          "expose_last_used_label": "Standardmäßig deaktiviert. Bei Aktivierung ist der letzte Link-Name für alle Benutzer mit Leserechten auf den Sensor sichtbar.",
           "notification_services": "Wähle ein oder mehrere Geräte. Nicht aufgeführte klassische notify.*-Dienste können manuell eingetragen werden.",
           "notification_events": "Wähle aus, bei welchen Ereignissen du benachrichtigt werden möchtest."
+        }
+      },
+      "action": {
+        "title": "Gast-Aktion auswählen",
+        "description": "{entity_id} wurde als {domain}-Entity erkannt. Wähle genau die Aktion, die Gäste auslösen dürfen.",
+        "data": {
+          "service": "Gast-Aktion"
+        },
+        "data_description": {
+          "service": "Es werden nur Aktionen angeboten, die zur Domain der ausgewählten Entity passen."
         }
       }
     },
@@ -71,6 +104,7 @@
       "invalid_notification_events": "Wähle nur unterstützte Benachrichtigungsereignisse.",
       "invalid_service": "Die Aktion muss das Format domain.service haben.",
       "domain_mismatch": "Entity und Aktion müssen dieselbe Domain verwenden.",
+      "no_compatible_service": "Für diese Entity ist derzeit keine kompatible Aktion verfügbar, die nur eine Entity benötigt.",
       "invalid_config": "Prüfe die eingegebenen Werte."
     }
   },

@@ -38,8 +38,14 @@ The configured entity and Home Assistant action are stored server-side and
 cannot be selected by a guest. Administrators can optionally authorize selected
 Home Assistant users per access point. Those users can create, list, and revoke
 only their own passes; bulk management and complete history access remain
-administrator-only. The complete link is nevertheless a bearer credential:
-possession of the URL grants its remaining access.
+administrator-only. Administrators can also limit the validity, finite use
+count, and unlimited-use capability available to those users. The complete link
+is nevertheless a bearer credential: possession of the URL grants its remaining
+access.
+
+The last-used sensor does not expose pass names by default. Enabling that option
+makes the latest name visible to every Home Assistant user who can read the
+sensor entity.
 
 Gate Pass HA does not provide identity verification, an internal firewall, or
 network-level rate limiting. Those controls belong at the reverse proxy and

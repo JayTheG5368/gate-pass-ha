@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -66,14 +67,14 @@ async def async_send_notification(
             else f'"{label}" successfully used the access link.'
         )
 
-    for notification_service in dict.fromkeys(notification_services):
+    async def _async_send_one(notification_service: str) -> None:
         domain, _, service = str(notification_service).partition(".")
         if not hass.services.has_service(domain, service):
             _LOGGER.warning(
                 "Gate Pass notification service %s is unavailable",
                 notification_service,
             )
-            continue
+            return
         try:
             await hass.services.async_call(
                 domain,
@@ -87,3 +88,10 @@ async def async_send_notification(
                 event_type,
                 notification_service,
             )
+
+    await asyncio.gather(
+        *(
+            _async_send_one(str(notification_service))
+            for notification_service in dict.fromkeys(notification_services)
+        )
+    )

@@ -1,5 +1,6 @@
 """Tests for independent multi-device notifications."""
 
+import asyncio
 from types import SimpleNamespace
 
 from custom_components.gate_pass.const import (
@@ -82,3 +83,37 @@ async def test_legacy_single_notification_service_still_works() -> None:
     await async_send_notification(hass, config, "revoked", label="Guest")
 
     assert services.calls == ["mobile_app_legacy"]
+
+
+async def test_multiple_notifications_run_concurrently() -> None:
+    both_started = asyncio.Event()
+
+    class ConcurrentServices(FakeServices):
+        async def async_call(
+            self,
+            domain: str,
+            service: str,
+            _data: dict[str, str],
+            *,
+            blocking: bool,
+        ) -> None:
+            assert domain == "notify"
+            assert blocking
+            self.calls.append(service)
+            if len(self.calls) == 2:
+                both_started.set()
+            await asyncio.wait_for(both_started.wait(), timeout=0.5)
+
+    services = ConcurrentServices()
+    hass = SimpleNamespace(services=services, config=SimpleNamespace(language="en"))
+    config = {
+        CONF_ACCESS_NAME: "Garage",
+        CONF_NOTIFICATION_SERVICES: ["notify.one", "notify.two"],
+        CONF_NOTIFICATION_EVENTS: ["used"],
+    }
+
+    await asyncio.wait_for(
+        async_send_notification(hass, config, "used", label="Guest"), timeout=1
+    )
+
+    assert services.calls == ["one", "two"]

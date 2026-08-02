@@ -20,6 +20,7 @@ points without exposing general Home Assistant controls to guests.
 ## Features
 
 - One fixed server-side Home Assistant action per access point
+- Automatic action detection from the selected entity domain
 - Optional multiple access points with a shared or separate public URL and port
 - Temporary guest links with expiry and optional use limits
 - Immediate or scheduled activation
@@ -71,17 +72,24 @@ for every additional access point.
 | Access point name | `Garage gate` | Name shown to administrators and guests |
 | Guest action label | `Open gate` | Text on the public action button |
 | Target entity | `button.garage_gate_open` | Entity controlled by the guest link |
-| Home Assistant action | `button.press` | Fixed `domain.service` action |
+| Guest action | `button.press` | Detected automatically; shown as a choice only when several safe actions match |
 | Local guest port | `8922` | Port used only by the guest web server |
 | Public base URL | `https://gate.example.com` | Public HTTPS origin, without a path |
 | Allowed link creators | `Family member` | Optional non-admin users who may manage their own links |
+| Creator maximum validity | `24` | Optional maximum hours for non-admin link creators |
+| Creator maximum use limit | `5` | Optional maximum finite uses for non-admin link creators |
+| Allow creator unlimited use | `Off` | Whether non-admin creators may select unlimited uses |
+| Expose last-used link name | `Off` | Optional sensor attribute visible to users with sensor access |
 | Notification devices | `Phone, Tablet` | Optional multi-select of registered `notify.*` services |
 | Notification events | `Pass used` | Optional selection of creation, use, and revocation events |
 | Default validity | `1` | Default validity in hours |
 | Default use limit | `1` | `0` means unlimited until expiry |
 
-The entity and action domains must match. For example, use `button.press` with
-a `button.*` entity or `cover.open_cover` with a `cover.*` entity.
+Gate Pass detects the entity domain and only offers actions that can be called
+with that entity alone. A `button.*` entity automatically uses `button.press`.
+Domains with several useful actions, such as `switch.*`, `cover.*`, or `lock.*`,
+show a second selection step. Existing advanced manual actions remain available
+when editing an access point.
 
 The public base URL is optional. When it is empty, Gate Pass uses an automatic
 local URL. When it is configured, generated links use that URL exactly and do
@@ -93,6 +101,12 @@ non-admin user can create, list, and revoke only links created by that same Home
 Assistant user. Administrators can still manage every link and the complete
 activity history. Existing links without owner information remain
 administrator-only.
+
+The creator limits apply only to selected non-administrator link creators.
+Administrators and trusted internal Home Assistant automations retain the full
+service limits. Existing installations remain compatible because the initial
+creator limits match the previous maximums until an administrator tightens
+them.
 
 Notification devices are optional. The multi-select lists the currently
 registered device-specific `notify.*` services and still accepts a manual
@@ -147,7 +161,7 @@ The integration serves its bundled card from the normal Home Assistant web
 server. In **Settings -> Dashboards -> Resources**, add:
 
 ```text
-/gate-pass/gate-pass-card.js?v=0.5.0
+/gate-pass/gate-pass-card.js?v=0.5.1
 ```
 
 Select **JavaScript module** as the resource type. Reload the browser or app,
@@ -208,6 +222,10 @@ returned only when the pass is created.
 
 Each access point also creates an active-pass count sensor and a timestamp sensor
 for the last successful use. These can be used in dashboards and automations.
+The last-used sensor always exposes the use count. Its pass-name attribute is
+disabled by default because every Home Assistant user with access to that entity
+could read it; administrators can explicitly enable it in the integration
+options.
 
 ## Security model
 

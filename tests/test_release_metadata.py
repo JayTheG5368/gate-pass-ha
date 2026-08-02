@@ -53,9 +53,27 @@ def test_translations_have_matching_top_level_keys() -> None:
     german = _read_json(INTEGRATION / "translations" / "de.json")
 
     assert english.keys() == german.keys()
+    assert english["config"]["step"].keys() == german["config"]["step"].keys()
+    assert english["options"]["step"].keys() == german["options"]["step"].keys()
     assert english["services"].keys() == german["services"].keys()
     assert "https://" not in json.dumps(english)
     assert "https://" not in json.dumps(german)
+
+
+def test_security_options_are_translated_in_every_flow() -> None:
+    """Keep creator limits and sensor privacy understandable to administrators."""
+    fields = {
+        "creator_max_duration_hours",
+        "creator_max_uses",
+        "creator_allow_unlimited_uses",
+        "expose_last_used_label",
+    }
+    for language in ("en", "de"):
+        translations = _read_json(INTEGRATION / "translations" / f"{language}.json")
+        config_data = translations["config"]["step"]["user"]["data"]
+        options_data = translations["options"]["step"]["init"]["data"]
+        assert fields <= config_data.keys()
+        assert fields <= options_data.keys()
 
 
 def test_service_descriptions_translations_and_icons_match() -> None:

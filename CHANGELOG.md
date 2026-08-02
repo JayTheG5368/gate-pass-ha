@@ -2,6 +2,29 @@
 
 All notable changes to Gate Pass HA are documented here.
 
+## [0.5.1] - 2026-08-03
+
+### Added
+
+- Optional validity, finite-use, and unlimited-use limits for authorized
+  non-administrator link creators
+- Privacy option for exposing the last-used pass name as a sensor attribute
+- Automatic guest-action detection from the selected entity domain, with a
+  restricted choice when several entity-only actions are available
+
+### Changed
+
+- Refresh the Lovelace card automatically and queue lifecycle updates that
+  arrive while another request is running
+- Hide naturally expired or exhausted passes without requiring a manual refresh
+- Send notifications to multiple selected devices concurrently
+
+### Security
+
+- Compare browser origins using the configured public scheme, host, and port
+- Serialize shared guest-server startup and shutdown per local port
+- Keep the last-used pass name out of sensor attributes by default
+
 ## [0.5.0] - 2026-07-27
 
 ### Added
@@ -88,6 +111,7 @@ All notable changes to Gate Pass HA are documented here.
 - Pass secrets are stored only as SHA-256 hashes
 - Failed Home Assistant actions no longer consume a pass use
 
+[0.5.1]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.5.1
 [0.5.0]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.5.0
 [0.4.0]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.4.0
 [0.3.0]: https://github.com/JayTheG5368/gate-pass-ha/releases/tag/v0.3.0

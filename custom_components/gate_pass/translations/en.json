@@ -9,22 +9,38 @@
           "access_name": "Access point name",
           "action_label": "Guest action label",
           "entity_id": "Target entity",
-          "service": "Home Assistant action (domain.service)",
           "guest_port": "Local guest port",
           "public_base_url": "Public base URL (optional)",
           "link_creator_user_ids": "Allowed link creators (optional)",
+          "creator_max_duration_hours": "Creator maximum validity (hours)",
+          "creator_max_uses": "Creator maximum use limit",
+          "creator_allow_unlimited_uses": "Allow creators unlimited-use links",
+          "expose_last_used_label": "Expose last-used link name in sensor",
           "notification_services": "Notification devices (optional)",
           "notification_events": "Notification events (optional)",
           "default_duration_hours": "Default validity (hours)",
           "default_max_uses": "Default use limit (0 = unlimited)"
         },
         "data_description": {
-          "service": "For a button, use button.press.",
           "guest_port": "Access points may share one port and public URL, or use separate ports and URLs.",
           "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL.",
           "link_creator_user_ids": "Selected non-administrator users may create, view, and revoke only their own passes for this access point.",
+          "creator_max_duration_hours": "Maximum validity a selected non-administrator may assign. Administrators are unaffected.",
+          "creator_max_uses": "Maximum finite use limit a selected non-administrator may assign.",
+          "creator_allow_unlimited_uses": "When disabled, selected non-administrators cannot create links with unlimited uses.",
+          "expose_last_used_label": "Disabled by default. Enabling it makes the last pass name visible to every user who can read the sensor.",
           "notification_services": "Select one or more devices. Unlisted classic notify.* services can be entered manually.",
           "notification_events": "Choose which pass lifecycle events should notify you."
+        }
+      },
+      "action": {
+        "title": "Choose guest action",
+        "description": "{entity_id} was recognized as a {domain} entity. Choose the exact action guests may trigger.",
+        "data": {
+          "service": "Guest action"
+        },
+        "data_description": {
+          "service": "Only actions matching the selected entity domain are offered."
         }
       }
     },
@@ -34,6 +50,7 @@
       "invalid_notification_events": "Select only supported notification events.",
       "invalid_service": "The action must use the domain.service format.",
       "domain_mismatch": "The entity and action must use the same domain.",
+      "no_compatible_service": "No compatible entity-only action is currently available for this entity.",
       "invalid_config": "Check the submitted values."
     }
   },
@@ -46,22 +63,38 @@
           "access_name": "Access point name",
           "action_label": "Guest action label",
           "entity_id": "Target entity",
-          "service": "Home Assistant action (domain.service)",
           "guest_port": "Local guest port",
           "public_base_url": "Public base URL (optional)",
           "link_creator_user_ids": "Allowed link creators (optional)",
+          "creator_max_duration_hours": "Creator maximum validity (hours)",
+          "creator_max_uses": "Creator maximum use limit",
+          "creator_allow_unlimited_uses": "Allow creators unlimited-use links",
+          "expose_last_used_label": "Expose last-used link name in sensor",
           "notification_services": "Notification devices (optional)",
           "notification_events": "Notification events (optional)",
           "default_duration_hours": "Default validity (hours)",
           "default_max_uses": "Default use limit (0 = unlimited)"
         },
         "data_description": {
-          "service": "For a button, use button.press.",
           "guest_port": "Access points may share one port and public URL, or use separate ports and URLs.",
           "public_base_url": "For example {example_url}. Leave empty for an automatically generated local URL.",
           "link_creator_user_ids": "Selected non-administrator users may create, view, and revoke only their own passes for this access point.",
+          "creator_max_duration_hours": "Maximum validity a selected non-administrator may assign. Administrators are unaffected.",
+          "creator_max_uses": "Maximum finite use limit a selected non-administrator may assign.",
+          "creator_allow_unlimited_uses": "When disabled, selected non-administrators cannot create links with unlimited uses.",
+          "expose_last_used_label": "Disabled by default. Enabling it makes the last pass name visible to every user who can read the sensor.",
           "notification_services": "Select one or more devices. Unlisted classic notify.* services can be entered manually.",
           "notification_events": "Choose which pass lifecycle events should notify you."
+        }
+      },
+      "action": {
+        "title": "Choose guest action",
+        "description": "{entity_id} was recognized as a {domain} entity. Choose the exact action guests may trigger.",
+        "data": {
+          "service": "Guest action"
+        },
+        "data_description": {
+          "service": "Only actions matching the selected entity domain are offered."
         }
       }
     },
@@ -71,6 +104,7 @@
       "invalid_notification_events": "Select only supported notification events.",
       "invalid_service": "The action must use the domain.service format.",
       "domain_mismatch": "The entity and action must use the same domain.",
+      "no_compatible_service": "No compatible entity-only action is currently available for this entity.",
       "invalid_config": "Check the submitted values."
     }
   },

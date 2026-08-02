@@ -420,7 +420,7 @@ class GuestServer:
             return web.json_response(
                 {"error": "Access point not found"}, status=404, headers=API_HEADERS
             )
-        if not self._check_browser_origin(request):
+        if not self._check_browser_origin(request, target.config):
             return web.json_response(
                 {"error": "Cross-site request rejected"},
                 status=403,
@@ -508,7 +508,9 @@ class GuestServer:
         return web.json_response({"success": True}, headers=API_HEADERS)
 
     @staticmethod
-    def _check_browser_origin(request: web.Request) -> bool:
+    def _check_browser_origin(
+        request: web.Request, config: dict[str, Any] | None = None
+    ) -> bool:
         site = request.headers.get("Sec-Fetch-Site", "").lower()
         if site and site not in {"same-origin", "same-site", "none"}:
             return False
@@ -518,6 +520,8 @@ class GuestServer:
         try:
             parsed_origin = urlsplit(origin)
             parsed_host = urlsplit(f"//{request.headers.get('Host', '').strip()}")
+            origin_port = parsed_origin.port
+            host_port = parsed_host.port
         except ValueError:
             return False
         origin_host = parsed_origin.hostname
@@ -533,4 +537,21 @@ class GuestServer:
             or not host
         ):
             return False
-        return origin_host.lower() == host.lower()
+        if config:
+            public_url = str(config.get(CONF_PUBLIC_BASE_URL, "")).strip()
+            if public_url:
+                try:
+                    public = urlsplit(public_url)
+                    public_port = public.port
+                except ValueError:
+                    return False
+                default_ports = {"http": 80, "https": 443}
+                if public.scheme.lower() not in default_ports or not public.hostname:
+                    return False
+                return (
+                    parsed_origin.scheme.lower() == public.scheme.lower()
+                    and origin_host.lower() == public.hostname.lower()
+                    and (origin_port or default_ports[parsed_origin.scheme.lower()])
+                    == (public_port or default_ports.get(public.scheme.lower()))
+                )
+        return origin_host.lower() == host.lower() and origin_port == host_port

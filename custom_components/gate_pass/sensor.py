@@ -14,6 +14,8 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import GatePassRuntime, get_runtime
 from .const import (
     CONF_ACCESS_NAME,
+    CONF_EXPOSE_LAST_USED_LABEL,
+    DEFAULT_EXPOSE_LAST_USED_LABEL,
     DOMAIN,
     EVENT_ACTIVITY_CLEARED,
     EVENT_PASS_CREATED,
@@ -112,7 +114,14 @@ class GatePassLastUsedSensor(GatePassSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Expose a privacy-conscious use summary."""
-        return {"label": self._label, "use_count": self._use_count}
+        attributes: dict[str, Any] = {"use_count": self._use_count}
+        if bool(
+            self.runtime.config.get(
+                CONF_EXPOSE_LAST_USED_LABEL, DEFAULT_EXPOSE_LAST_USED_LABEL
+            )
+        ):
+            attributes["label"] = self._label
+        return attributes
 
     async def async_added_to_hass(self) -> None:
         """Listen for successful use and history clearing."""

@@ -6,7 +6,17 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from .const import CONF_LINK_CREATOR_USER_IDS
+from .const import (
+    CONF_CREATOR_ALLOW_UNLIMITED_USES,
+    CONF_CREATOR_MAX_DURATION_HOURS,
+    CONF_CREATOR_MAX_USES,
+    CONF_LINK_CREATOR_USER_IDS,
+    DEFAULT_CREATOR_ALLOW_UNLIMITED_USES,
+    DEFAULT_CREATOR_MAX_DURATION_HOURS,
+    DEFAULT_CREATOR_MAX_USES,
+    MAX_DURATION_HOURS,
+    MAX_USES,
+)
 
 
 @dataclass(frozen=True)
@@ -35,6 +45,25 @@ NO_ACCESS = AccessRights(False, False, None)
 FULL_ACCESS = AccessRights(True, True, None)
 
 
+@dataclass(frozen=True)
+class CreationLimits:
+    """Pass creation limits exposed to an authorized caller."""
+
+    max_duration_hours: float
+    max_uses: int
+    allow_unlimited_uses: bool
+    restricted: bool
+
+    def as_dict(self) -> dict[str, bool | float | int]:
+        """Return frontend-safe creation limits."""
+        return {
+            "max_duration_hours": self.max_duration_hours,
+            "max_uses": self.max_uses,
+            "allow_unlimited_uses": self.allow_unlimited_uses,
+            "restricted": self.restricted,
+        }
+
+
 def normalize_user_ids(value: Any) -> list[str]:
     """Normalize a selector value to unique non-empty user IDs."""
     if isinstance(value, str):
@@ -61,3 +90,43 @@ def access_rights(
     if user_id in normalize_user_ids(config.get(CONF_LINK_CREATOR_USER_IDS, [])):
         return AccessRights(True, False, user_id)
     return NO_ACCESS
+
+
+def creation_limits(
+    config: Mapping[str, Any], *, is_admin: bool
+) -> CreationLimits:
+    """Return configured limits, leaving administrators unrestricted."""
+    if is_admin:
+        return CreationLimits(MAX_DURATION_HOURS, MAX_USES, True, False)
+    return CreationLimits(
+        max_duration_hours=float(
+            config.get(
+                CONF_CREATOR_MAX_DURATION_HOURS,
+                DEFAULT_CREATOR_MAX_DURATION_HOURS,
+            )
+        ),
+        max_uses=int(config.get(CONF_CREATOR_MAX_USES, DEFAULT_CREATOR_MAX_USES)),
+        allow_unlimited_uses=bool(
+            config.get(
+                CONF_CREATOR_ALLOW_UNLIMITED_USES,
+                DEFAULT_CREATOR_ALLOW_UNLIMITED_USES,
+            )
+        ),
+        restricted=True,
+    )
+
+
+def validate_creation_request(
+    limits: CreationLimits, *, duration_hours: float, max_uses: int
+) -> None:
+    """Reject pass settings outside the caller's configured limits."""
+    if duration_hours > limits.max_duration_hours:
+        raise ValueError(
+            f"Validity exceeds the allowed maximum of {limits.max_duration_hours:g} hours"
+        )
+    if max_uses == 0 and not limits.allow_unlimited_uses:
+        raise ValueError("Unlimited use is not allowed for this link creator")
+    if max_uses > limits.max_uses:
+        raise ValueError(
+            f"Use limit exceeds the allowed maximum of {limits.max_uses}"
+        )

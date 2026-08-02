@@ -2,6 +2,13 @@ import { LitElement, css, html } from 'lit';
 import QRCode from 'qrcode';
 
 const COPY_CLEAR_MS = 120000;
+const AUTO_REFRESH_MS = 60000;
+const DEFAULT_CREATION_LIMITS = {
+  max_duration_hours: 720,
+  max_uses: 1000,
+  allow_unlimited_uses: true,
+  restricted: false,
+};
 
 const DURATION_OPTIONS = {
   de: [
@@ -111,6 +118,7 @@ class GatePassCard extends LitElement {
     _draftDuration: { state: true },
     _draftUses: { state: true },
     _permissions: { state: true },
+    _creationLimits: { state: true },
   };
 
   constructor() {
@@ -132,9 +140,13 @@ class GatePassCard extends LitElement {
     this._draftDuration = null;
     this._draftUses = null;
     this._permissions = { can_create: false, can_manage: false, can_revoke: false };
+    this._creationLimits = { ...DEFAULT_CREATION_LIMITS };
     this._draftLabel = null;
     this._eventUnsubs = [];
     this._clearTimer = null;
+    this._refreshTimer = null;
+    this._refreshPending = false;
+    this._refreshGeneration = 0;
   }
 
   setConfig(config) {
@@ -162,12 +174,15 @@ class GatePassCard extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     if (this._hass && this._eventUnsubs.length === 0) this._subscribe();
+    this._startAutoRefresh();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this._unsubscribe();
     if (this._clearTimer) clearTimeout(this._clearTimer);
+    if (this._refreshTimer) clearInterval(this._refreshTimer);
+    this._refreshTimer = null;
   }
 
   get _text() {
@@ -196,12 +211,26 @@ class GatePassCard extends LitElement {
     );
     this._permissions = selected?.permissions
       || { can_create: false, can_manage: false, can_revoke: false };
+    this._creationLimits = selected?.creation_limits
+      || { ...DEFAULT_CREATION_LIMITS };
   }
 
   _serviceData(extra = {}) {
     return this._selectedAccessPoint
       ? { config_entry_id: this._selectedAccessPoint, ...extra }
       : { ...extra };
+  }
+
+  _serviceDataFor(entryId, extra = {}) {
+    return entryId ? { config_entry_id: entryId, ...extra } : { ...extra };
+  }
+
+  _startAutoRefresh() {
+    if (this._refreshTimer) return;
+    this._refreshTimer = setInterval(() => {
+      this.requestUpdate();
+      this._refresh();
+    }, AUTO_REFRESH_MS);
   }
 
   async _subscribe() {
@@ -227,22 +256,30 @@ class GatePassCard extends LitElement {
   }
 
   async _refresh() {
-    if (!this._hass || this._loading) return;
+    if (!this._hass) return;
+    if (this._loading) {
+      this._refreshPending = true;
+      return;
+    }
     if (!this._selectedAccessPoint) {
       try { await this._loadAccessPoints(); } catch (_) { /* handled below */ }
     }
+    const entryId = this._selectedAccessPoint;
+    if (!entryId) return;
+    const generation = ++this._refreshGeneration;
     this._loading = true;
     try {
       const [passesResult, activityResult] = await Promise.all([
         this._hass.callWS({
           type: 'call_service', domain: 'gate_pass', service: 'list_passes', return_response: true,
-          service_data: this._serviceData(),
+          service_data: this._serviceDataFor(entryId),
         }),
         this._hass.callWS({
           type: 'call_service', domain: 'gate_pass', service: 'list_activity', return_response: true,
-          service_data: this._serviceData(),
+          service_data: this._serviceDataFor(entryId),
         }),
       ]);
+      if (generation !== this._refreshGeneration || entryId !== this._selectedAccessPoint) return;
       this._passes = passesResult?.response?.passes || [];
       this._activity = activityResult?.response?.activity || [];
       this._permissions = passesResult?.response?.permissions
@@ -251,14 +288,23 @@ class GatePassCard extends LitElement {
       this._accessName = passesResult?.response?.access_name || activityResult?.response?.access_name || '';
       this._error = '';
     } catch (error) {
-      this._error = `${this._text.loadError} ${error.message || ''}`.trim();
+      if (entryId === this._selectedAccessPoint) {
+        this._error = `${this._text.loadError} ${error.message || ''}`.trim();
+      }
     } finally {
       this._loading = false;
+      if (this._refreshPending) {
+        this._refreshPending = false;
+        await this._refresh();
+      }
     }
   }
 
   async _refreshAll() {
-    if (this._loading) return;
+    if (this._loading) {
+      this._refreshPending = true;
+      return;
+    }
     try {
       await this._loadAccessPoints();
       await this._refresh();
@@ -269,6 +315,13 @@ class GatePassCard extends LitElement {
 
   async _accessPointChanged(event) {
     this._selectedAccessPoint = event.currentTarget.value;
+    const selected = this._accessPoints.find(
+      (item) => item.config_entry_id === this._selectedAccessPoint,
+    );
+    this._permissions = selected?.permissions
+      || { can_create: false, can_manage: false, can_revoke: false };
+    this._creationLimits = selected?.creation_limits
+      || { ...DEFAULT_CREATION_LIMITS };
     this._passes = [];
     this._activity = [];
     this._accessName = '';
@@ -307,12 +360,10 @@ class GatePassCard extends LitElement {
       this._draftDuration = null;
       this._draftUses = null;
       this._scheduleClear();
-      this._loading = false;
-      await this._refresh();
     } catch (error) {
       this._error = `${this._text.createError} ${error.message || ''}`.trim();
     } finally {
-      this._loading = false;
+      await this._completeMutation(true);
     }
   }
 
@@ -329,7 +380,7 @@ class GatePassCard extends LitElement {
     } catch (error) {
       this._error = `${this._text.revokeError} ${error.message || ''}`.trim();
     } finally {
-      this._loading = false;
+      await this._completeMutation(true);
     }
   }
 
@@ -346,7 +397,7 @@ class GatePassCard extends LitElement {
     } catch (error) {
       this._error = `${this._text.revokeError} ${error.message || ''}`.trim();
     } finally {
-      this._loading = false;
+      await this._completeMutation(true);
     }
   }
 
@@ -363,7 +414,7 @@ class GatePassCard extends LitElement {
     } catch (error) {
       this._error = `${this._text.clearActivityError} ${error.message || ''}`.trim();
     } finally {
-      this._loading = false;
+      await this._completeMutation(true);
     }
   }
 
@@ -389,8 +440,15 @@ class GatePassCard extends LitElement {
     } catch (error) {
       this._error = `${this._text.exportError} ${error.message || ''}`.trim();
     } finally {
-      this._loading = false;
+      await this._completeMutation(false);
     }
+  }
+
+  async _completeMutation(refresh) {
+    this._loading = false;
+    const shouldRefresh = refresh || this._refreshPending;
+    this._refreshPending = false;
+    if (shouldRefresh) await this._refresh();
   }
 
   _scheduleClear() {
@@ -535,8 +593,18 @@ class GatePassCard extends LitElement {
     return `${minutes}${this._text.minutes}`;
   }
 
+  _activePasses() {
+    const now = Date.now();
+    return this._passes.filter((pass) => {
+      const expiresAt = new Date(pass.expires_at).getTime();
+      const hasUses = pass.max_uses === 0 || pass.use_count < pass.max_uses;
+      return Number.isFinite(expiresAt) && expiresAt > now && hasUses;
+    });
+  }
+
   render() {
     const t = this._text;
+    const activePasses = this._activePasses();
     return html`
       <ha-card>
         <header>
@@ -566,7 +634,7 @@ class GatePassCard extends LitElement {
 
         <nav class="tabs" aria-label=${t.title}>
           <button type="button" class=${this._view === 'active' ? 'tab active' : 'tab'} aria-pressed=${this._view === 'active'} @click=${() => { this._view = 'active'; }}>
-            <ha-icon icon="mdi:ticket-confirmation-outline"></ha-icon><span>${t.active}</span><strong>${this._passes.length}</strong>
+            <ha-icon icon="mdi:ticket-confirmation-outline"></ha-icon><span>${t.active}</span><strong>${activePasses.length}</strong>
           </button>
           <button type="button" class=${this._view === 'activity' ? 'tab active' : 'tab'} aria-pressed=${this._view === 'activity'} @click=${() => { this._view = 'activity'; }}>
             <ha-icon icon="mdi:history"></ha-icon><span>${t.activity}</span><strong>${this._activity.length}</strong>
@@ -575,8 +643,8 @@ class GatePassCard extends LitElement {
 
         ${this._view === 'active' ? html`
           <section>
-            <div class="section-heading"><h3>${t.active}</h3>${this._permissions.can_manage && this._passes.length ? html`<ha-button class="danger" @click=${this._revokeAll}>${t.revokeAll}</ha-button>` : ''}</div>
-            ${this._passes.length ? this._passes.map((pass) => this._renderPass(pass, t)) : html`<div class="empty"><ha-icon icon="mdi:ticket-outline"></ha-icon><span>${t.noPasses}</span></div>`}
+            <div class="section-heading"><h3>${t.active}</h3>${this._permissions.can_manage && activePasses.length ? html`<ha-button class="danger" @click=${this._revokeAll}>${t.revokeAll}</ha-button>` : ''}</div>
+            ${activePasses.length ? activePasses.map((pass) => this._renderPass(pass, t)) : html`<div class="empty"><ha-icon icon="mdi:ticket-outline"></ha-icon><span>${t.noPasses}</span></div>`}
           </section>
         ` : html`
           <section>
@@ -590,20 +658,28 @@ class GatePassCard extends LitElement {
 
   _renderForm(t) {
     const language = this._hass?.language === 'de' ? 'de' : 'en';
+    const maxDuration = Number(this._creationLimits?.max_duration_hours) || 720;
+    const maxUses = Number(this._creationLimits?.max_uses) || 1000;
+    const allowUnlimited = this._creationLimits?.allow_unlimited_uses !== false;
     const durationValue = Number(this._draftDuration ?? this._config.default_duration);
     const usesValue = Number(this._draftUses ?? this._config.default_max_uses);
-    const configuredDuration = Number.isFinite(durationValue) && durationValue >= 0.1 && durationValue <= 720
-      ? durationValue : 1;
-    const configuredUses = Number.isInteger(usesValue) && usesValue >= 0 && usesValue <= 1000
-      ? usesValue : 1;
-    const durations = [...DURATION_OPTIONS[language]];
-    const uses = [...USE_OPTIONS[language]];
+    const configuredDuration = Number.isFinite(durationValue) && durationValue >= 0.1
+      ? Math.min(durationValue, maxDuration) : Math.min(1, maxDuration);
+    const finiteUses = Number.isInteger(usesValue) && usesValue > 0
+      ? Math.min(usesValue, maxUses) : 1;
+    const configuredUses = usesValue === 0 && allowUnlimited ? 0 : finiteUses;
+    const durations = DURATION_OPTIONS[language].filter(([value]) => value <= maxDuration);
+    const uses = USE_OPTIONS[language].filter(([value]) => (
+      value === 0 ? allowUnlimited : value <= maxUses
+    ));
     if (!durations.some(([value]) => value === configuredDuration)) {
       durations.push([configuredDuration, `${configuredDuration} h`]);
       durations.sort(([left], [right]) => left - right);
     }
     if (!uses.some(([value]) => value === configuredUses)) {
-      uses.splice(uses.length - 1, 0, [configuredUses, String(configuredUses)]);
+      const unlimitedIndex = uses.findIndex(([value]) => value === 0);
+      const insertAt = unlimitedIndex === -1 ? uses.length : unlimitedIndex;
+      uses.splice(insertAt, 0, [configuredUses, String(configuredUses)]);
     }
     const startOptions = [
       ['now', t.startNow], ['two_hours', t.startTwoHours],
@@ -676,7 +752,7 @@ class GatePassCard extends LitElement {
   }
 
   getCardSize() {
-    const visibleRows = this._view === 'activity' ? this._activity.length : this._passes.length;
+    const visibleRows = this._view === 'activity' ? this._activity.length : this._activePasses().length;
     return 3 + Math.max(1, visibleRows) + (this._newPass ? 4 : 0) + (this._showForm ? 3 : 0);
   }
 
