@@ -20,10 +20,12 @@ archive automatically after a matching tag is pushed.
    python -m ruff format --check custom_components tests scripts
    npm ci
    npm run lint
+   npm test
+   npm audit --audit-level=high
    npm run build
    ```
 
-4. Commit and push the release preparation to `main`.
+4. Submit the release preparation in a pull request targeting `main` and merge it after validation.
 5. Wait for the CI, HACS, and hassfest workflows to pass.
 
 ## Publish

@@ -92,9 +92,7 @@ def access_rights(
     return NO_ACCESS
 
 
-def creation_limits(
-    config: Mapping[str, Any], *, is_admin: bool
-) -> CreationLimits:
+def creation_limits(config: Mapping[str, Any], *, is_admin: bool) -> CreationLimits:
     """Return configured limits, leaving administrators unrestricted."""
     if is_admin:
         return CreationLimits(MAX_DURATION_HOURS, MAX_USES, True, False)
@@ -127,6 +125,4 @@ def validate_creation_request(
     if max_uses == 0 and not limits.allow_unlimited_uses:
         raise ValueError("Unlimited use is not allowed for this link creator")
     if max_uses > limits.max_uses:
-        raise ValueError(
-            f"Use limit exceeds the allowed maximum of {limits.max_uses}"
-        )
+        raise ValueError(f"Use limit exceeds the allowed maximum of {limits.max_uses}")

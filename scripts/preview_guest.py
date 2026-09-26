@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import ast
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 PORT = 4173
@@ -19,19 +19,18 @@ def _guest_html() -> str:
         )
     )
     for node in tree.body:
-        if isinstance(node, ast.Assign):
-            if any(
-                isinstance(target, ast.Name) and target.id == "GUEST_PAGE_HTML"
-                for target in node.targets
-            ):
-                return ast.literal_eval(node.value)
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "GUEST_PAGE_HTML"
+            for target in node.targets
+        ):
+            return ast.literal_eval(node.value)
     raise RuntimeError("GUEST_PAGE_HTML not found")
 
 
 class PreviewHandler(BaseHTTPRequestHandler):
     """Return the guest page and deterministic fake API responses."""
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         if self.path == "/gate-pass/assets/icon.png":
             encoded = BRAND_ICON.read_bytes()
             self.send_response(200)
@@ -56,10 +55,10 @@ class PreviewHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(_guest_html().encode("utf-8"))
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         content_length = int(self.headers.get("Content-Length", "0"))
         self.rfile.read(content_length)
-        self._json({"success": True})
+        self._json({"success": True, "remaining_uses": 0})
 
     def _json(self, data: dict[str, object]) -> None:
         encoded = json.dumps(data).encode("utf-8")

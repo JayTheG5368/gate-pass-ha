@@ -4,9 +4,9 @@ from custom_components.gate_pass.action_detection import action_services
 
 
 def test_button_action_is_detected_automatically() -> None:
-    assert action_services(
-        "button.garage_open", ["press", "irrelevant_service"]
-    ) == ["button.press"]
+    assert action_services("button.garage_open", ["press", "irrelevant_service"]) == [
+        "button.press"
+    ]
 
 
 def test_ambiguous_switch_actions_keep_recommended_order() -> None:
@@ -28,11 +28,14 @@ def test_existing_manual_action_remains_available() -> None:
     ]
 
 
-def test_unknown_domain_uses_its_registered_services() -> None:
-    assert action_services("custom.entry", ["activate", "deactivate"]) == [
-        "custom.activate",
-        "custom.deactivate",
-    ]
+def test_unknown_domain_fails_closed() -> None:
+    assert action_services("custom.entry", ["activate", "deactivate"]) == []
+
+
+def test_unknown_domain_preserves_only_explicit_existing_action() -> None:
+    assert action_services(
+        "custom.entry", ["activate", "deactivate"], current_service="custom.activate"
+    ) == ["custom.activate"]
 
 
 def test_invalid_entity_has_no_actions() -> None:

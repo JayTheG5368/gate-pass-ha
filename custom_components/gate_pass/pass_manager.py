@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import secrets
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
-from .const import ACTIVITY_LIMIT
+from .const import ACTIVITY_LIMIT, TERMINAL_PASS_LIMIT
 
 
 class PassStorage(Protocol):
@@ -51,6 +51,7 @@ class PassManager:
         storage: PassStorage,
         *,
         now: Callable[[], datetime] | None = None,
+        action: tuple[str, str] | None = None,
     ) -> None:
         self._storage = storage
         self._now = now or (lambda: datetime.now(timezone.utc))
@@ -58,6 +59,10 @@ class PassManager:
         self._activity: list[dict[str, Any]] = []
         self._reserved: set[str] = set()
         self._lock = asyncio.Lock()
+        self._action = list(action) if action is not None else None
+        self._closing = False
+        self._idle = asyncio.Event()
+        self._idle.set()
 
     async def async_load(self) -> None:
         """Load persisted passes."""
@@ -80,7 +85,30 @@ class PassManager:
             and isinstance(item.get("event_type"), str)
             and isinstance(item.get("occurred_at"), str)
         ]
+        if self._action is not None and data.get("action") != self._action:
+            # Adopt legacy records once; subsequent target changes revoke them.
+            if data.get("action") is not None:
+                for record in self._passes.values():
+                    if record.get("active"):
+                        record["active"] = False
+                        self._append_activity_locked("revoked", record)
+            await self._async_save_locked()
         await self.async_list_active()
+        if (
+            sum(not record.get("active") for record in self._passes.values())
+            > TERMINAL_PASS_LIMIT
+        ):
+            await self._async_save_locked()
+
+    async def async_shutdown(self) -> None:
+        """Reject new work and drain reserved actions before reloading storage."""
+        async with self._lock:
+            self._closing = True
+        await self._idle.wait()
+
+    def _ensure_open(self) -> None:
+        if self._closing:
+            raise PassUnavailableError("unavailable")
 
     async def async_create(
         self,
@@ -99,8 +127,7 @@ class PassManager:
 
         now = self._as_utc(self._now())
         starts_at = self._as_utc(valid_from) if valid_from is not None else now
-        if starts_at < now:
-            starts_at = now
+        starts_at = max(starts_at, now)
         pass_id = "gp_" + secrets.token_urlsafe(12)
         secret = secrets.token_urlsafe(32)
         record: dict[str, Any] = {
@@ -118,6 +145,7 @@ class PassManager:
         }
 
         async with self._lock:
+            self._ensure_open()
             self._passes[pass_id] = record
             self._append_activity_locked("created", record, occurred_at=now)
             await self._async_save_locked()
@@ -151,6 +179,7 @@ class PassManager:
                 raise PassUnavailableError("exhausted")
 
             self._reserved.add(pass_id)
+            self._idle.clear()
             return self._safe(record)
 
     async def async_commit_use(self, pass_id: str) -> dict[str, Any]:
@@ -158,8 +187,6 @@ class PassManager:
         async with self._lock:
             if pass_id not in self._reserved:
                 raise RuntimeError("pass use was not reserved")
-            self._reserved.remove(pass_id)
-
             record = self._passes[pass_id]
             record["use_count"] = int(record.get("use_count", 0)) + 1
             used_at = self._as_utc(self._now())
@@ -168,13 +195,20 @@ class PassManager:
             if max_uses > 0 and record["use_count"] >= max_uses:
                 record["active"] = False
             self._append_activity_locked("used", record, occurred_at=used_at)
-            await self._async_save_locked()
+            try:
+                await self._async_save_locked()
+            finally:
+                self._reserved.discard(pass_id)
+                if not self._reserved:
+                    self._idle.set()
             return self._safe(record)
 
     async def async_release_use(self, pass_id: str) -> None:
         """Release a reservation after a failed HA action without consuming it."""
         async with self._lock:
             self._reserved.discard(pass_id)
+            if not self._reserved:
+                self._idle.set()
 
     async def async_list_active(
         self, *, owner_user_id: str | None = None
@@ -182,6 +216,7 @@ class PassManager:
         """Return active, unexpired passes without secrets or hashes."""
         changed = False
         async with self._lock:
+            self._ensure_open()
             for record in self._passes.values():
                 if record.get("active") and self._is_expired(record):
                     record["active"] = False
@@ -213,6 +248,7 @@ class PassManager:
     async def async_clear_activity(self) -> int:
         """Clear all persistent activity records and return the removed count."""
         async with self._lock:
+            self._ensure_open()
             count = len(self._activity)
             if count:
                 self._activity.clear()
@@ -224,6 +260,7 @@ class PassManager:
     ) -> bool:
         """Revoke one pass."""
         async with self._lock:
+            self._ensure_open()
             record = self._passes.get(pass_id)
             if record is None or (
                 owner_user_id is not None
@@ -240,6 +277,7 @@ class PassManager:
         """Revoke all active passes."""
         count = 0
         async with self._lock:
+            self._ensure_open()
             for record in self._passes.values():
                 if record.get("active"):
                     record["active"] = False
@@ -259,6 +297,7 @@ class PassManager:
             await self._async_save_locked()
 
     def _validate_locked(self, pass_id: str, secret: str) -> dict[str, Any]:
+        self._ensure_open()
         record = self._passes.get(pass_id)
         if record is None:
             raise PassUnavailableError("invalid")
@@ -308,10 +347,20 @@ class PassManager:
         return value.astimezone(timezone.utc)
 
     async def _async_save_locked(self) -> None:
+        # Keep a bounded recent terminal history; never evict an in-flight use.
+        terminal = [
+            record
+            for record in self._passes.values()
+            if not record.get("active") and record["pass_id"] not in self._reserved
+        ]
+        terminal.sort(key=lambda record: str(record.get("created_at", "")))
+        for record in terminal[:-TERMINAL_PASS_LIMIT]:
+            self._passes.pop(record["pass_id"], None)
         await self._storage.async_save(
             {
                 "passes": list(self._passes.values()),
                 "activity": self._activity,
+                "action": self._action,
             }
         )
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-
 # Every listed action can be called with only an entity_id. The first action is
 # the recommended choice when a domain offers more than one useful operation.
 DOMAIN_ACTIONS: dict[str, tuple[str, ...]] = {
@@ -56,11 +55,8 @@ def action_services(
         return []
 
     available = {str(service).strip().lower() for service in available_services}
-    preferred = DOMAIN_ACTIONS.get(domain)
-    if preferred is None:
-        candidates = sorted(available)
-    else:
-        candidates = [service for service in preferred if service in available]
+    preferred = DOMAIN_ACTIONS.get(domain, ())
+    candidates = [service for service in preferred if service in available]
 
     current = str(current_service).strip().lower()
     current_domain, current_separator, current_action = current.partition(".")

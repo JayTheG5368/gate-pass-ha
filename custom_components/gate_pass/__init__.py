@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
@@ -41,8 +40,10 @@ from .const import (
     CONF_ACTION_LABEL,
     CONF_DEFAULT_DURATION_HOURS,
     CONF_DEFAULT_MAX_USES,
+    CONF_ENTITY_ID,
     CONF_GUEST_PORT,
     CONF_PUBLIC_BASE_URL,
+    CONF_SERVICE,
     DATA_RUNTIMES,
     DATA_SERVER_LOCKS,
     DATA_SERVERS,
@@ -353,7 +354,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entries = hass.config_entries.async_entries(DOMAIN)
     legacy_owner = bool(entries and entries[0].entry_id == entry.entry_id)
     manager = PassManager(
-        HomeAssistantPassStorage(hass, entry.entry_id, migrate_legacy=legacy_owner)
+        HomeAssistantPassStorage(hass, entry.entry_id, migrate_legacy=legacy_owner),
+        action=(merged_config[CONF_ENTITY_ID], merged_config[CONF_SERVICE]),
     )
     await manager.async_load()
 
@@ -363,9 +365,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         server = servers.get(port)
         if server is None:
             server = GuestServer(hass, port)
-            server.register(
-                entry.entry_id, manager, merged_config, legacy=legacy_owner
-            )
+            server.register(entry.entry_id, manager, merged_config, legacy=legacy_owner)
             try:
                 await server.async_start()
             except OSError as err:
@@ -376,9 +376,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 ) from err
             servers[port] = server
         else:
-            server.register(
-                entry.entry_id, manager, merged_config, legacy=legacy_owner
-            )
+            server.register(entry.entry_id, manager, merged_config, legacy=legacy_owner)
 
     runtime = GatePassRuntime(entry.entry_id, merged_config, manager, server)
     runtimes[entry.entry_id] = runtime
@@ -387,6 +385,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception:
         runtimes.pop(entry.entry_id, None)
         async with server_lock:
+            await manager.async_shutdown()
             server.unregister(entry.entry_id)
             if server.empty:
                 servers.pop(port, None)
@@ -419,6 +418,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     server_locks: dict[int, asyncio.Lock] = domain_data.get(DATA_SERVER_LOCKS, {})
     server_lock = server_locks.setdefault(port, asyncio.Lock())
     async with server_lock:
+        await runtime.manager.async_shutdown()
         runtime.server.unregister(entry.entry_id)
         if runtime.server.empty:
             domain_data.get(DATA_SERVERS, {}).pop(port, None)

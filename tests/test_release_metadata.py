@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import struct
-
+from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 INTEGRATION = ROOT / "custom_components" / "gate_pass"

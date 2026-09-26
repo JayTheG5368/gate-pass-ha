@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.2
+
+- Drain in-flight uses before reloading an access point, including shared guest servers.
+- Persist action bindings and revoke existing links when the entity or action changes.
+- Restore the guest action button when successful links still have remaining uses.
+- Automatically refresh scheduled guest links when their activation time arrives.
+- Bound terminal pass storage to 200 recent records and fail closed when detecting unknown domains.
+- Add real aiohttp endpoint tests, integration lifecycle regression tests, and executable guest-page tests.
+- Update the dependencies and pinned GitHub Actions proposed in PRs #5, #6, #8, #10, #11, #13, #16, #17, #18, and #19; add an npm security audit to CI and release checks.
+- Provide an importable main-branch ruleset; repository administrators must activate it separately.
+
+
 All notable changes to Gate Pass HA are documented here.
 
 ## [0.5.1] - 2026-08-03

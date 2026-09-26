@@ -1,9 +1,8 @@
 """Test configuration for Gate Pass HA core modules."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 from types import ModuleType
-
 
 # Load the pure core modules without importing the Home Assistant integration
 # package entrypoint. Full HA wiring is exercised on the target test instance.
@@ -26,10 +25,3 @@ sys.modules.setdefault("homeassistant", homeassistant)
 sys.modules.setdefault("homeassistant.core", homeassistant_core)
 sys.modules.setdefault("homeassistant.helpers", homeassistant_helpers)
 sys.modules.setdefault("homeassistant.helpers.storage", homeassistant_storage)
-
-aiohttp = ModuleType("aiohttp")
-aiohttp.__path__ = []
-aiohttp_web = ModuleType("aiohttp.web")
-aiohttp.web = aiohttp_web
-sys.modules.setdefault("aiohttp", aiohttp)
-sys.modules.setdefault("aiohttp.web", aiohttp_web)

@@ -1,11 +1,12 @@
 {
   "name": "gate-pass-ha-card",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "rollup -c",
-    "lint": "eslint frontend/src/"
+    "lint": "eslint frontend/src/",
+    "test": "node --test tests/frontend/*.test.mjs"
   },
   "dependencies": {
     "lit": "^3.3.1",
@@ -15,7 +16,7 @@
     "@rollup/plugin-commonjs": "^29.0.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^1.0.0",
-    "eslint": "^9.39.0",
-    "rollup": "^4.62.2"
+    "eslint": "^10.9.1",
+    "rollup": "^4.63.1"
   }
 }

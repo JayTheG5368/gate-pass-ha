@@ -1,15 +1,15 @@
 """Tests for access-point scoped Home Assistant storage migration."""
 
-from typing import Any
+from typing import Any, ClassVar
 
-from custom_components.gate_pass.const import STORAGE_KEY, STORAGE_MIGRATION_KEY
 from custom_components.gate_pass import storage as storage_module
+from custom_components.gate_pass.const import STORAGE_KEY, STORAGE_MIGRATION_KEY
 
 
 class FakeStore:
     """In-memory stand-in for Home Assistant Store."""
 
-    data: dict[str, dict[str, Any]] = {}
+    data: ClassVar[dict[str, dict[str, Any]]] = {}
 
     def __init__(self, _hass: object, _version: int, key: str) -> None:
         self.key = key
