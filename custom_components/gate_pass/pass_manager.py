@@ -183,6 +183,15 @@ class PassManager:
             return self._safe(record)
 
     async def async_commit_use(self, pass_id: str) -> dict[str, Any]:
+        """Finish accounting even when the HTTP request is cancelled."""
+        task = asyncio.create_task(self._async_commit_use(pass_id))
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            await task
+            raise
+
+    async def _async_commit_use(self, pass_id: str) -> dict[str, Any]:
         """Commit a reserved use after the configured HA action succeeds."""
         async with self._lock:
             if pass_id not in self._reserved:

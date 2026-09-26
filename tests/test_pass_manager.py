@@ -337,3 +337,36 @@ async def test_shutdown_waits_for_persistence_not_just_action():
     assert storage.data["passes"][0]["use_count"] == 1
     with pytest.raises(PassUnavailableError):
         await manager.async_create(label="late", duration_hours=1, max_uses=1)
+
+
+async def test_cancelled_commit_finishes_persistence_before_shutdown():
+    import asyncio
+
+    from .test_server_http import SnapshotStorage
+
+    storage = SnapshotStorage()
+    manager = PassManager(storage)
+    record, secret = await manager.async_create(
+        label="once", duration_hours=1, max_uses=1
+    )
+    await manager.async_reserve_use(record["pass_id"], secret)
+    saving, finish = asyncio.Event(), asyncio.Event()
+    original_save = storage.async_save
+
+    async def slow_save(data):
+        saving.set()
+        await finish.wait()
+        await original_save(data)
+
+    storage.async_save = slow_save
+    commit = asyncio.create_task(manager.async_commit_use(record["pass_id"]))
+    await asyncio.wait_for(saving.wait(), 2)
+    commit.cancel()
+    shutdown = asyncio.create_task(manager.async_shutdown())
+    await asyncio.sleep(0)
+    assert not shutdown.done()
+    finish.set()
+    with pytest.raises(asyncio.CancelledError):
+        await commit
+    await asyncio.wait_for(shutdown, 2)
+    assert storage.data["passes"][0]["use_count"] == 1
