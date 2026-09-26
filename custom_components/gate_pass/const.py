@@ -63,6 +63,7 @@ STORAGE_KEY: Final = f"{DOMAIN}.passes"
 STORAGE_MIGRATION_KEY: Final = f"{DOMAIN}.storage_migration"
 STORAGE_VERSION: Final = 1
 ACTIVITY_LIMIT: Final = 200
+TERMINAL_PASS_LIMIT: Final = 200
 PLATFORMS: Final = ("sensor",)
 
 DATA_RUNTIMES: Final = "runtimes"

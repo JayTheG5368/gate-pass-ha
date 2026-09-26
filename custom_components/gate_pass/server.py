@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,7 +10,6 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from aiohttp import web
-
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -170,6 +170,7 @@ GUEST_PAGE_HTML = """<!doctype html>
   }
 
   async function load() {
+    button.disabled = true;
     try {
       const response = await fetch(api + '/status', { cache: 'no-store' });
       const data = await response.json();
@@ -180,6 +181,7 @@ GUEST_PAGE_HTML = """<!doctype html>
         document.getElementById('actionLabel').textContent = data.action_label;
         button.textContent = 'Noch nicht aktiv';
         setStatus('Gültig ab ' + new Date(data.valid_from).toLocaleString(), '');
+        setTimeout(load, Math.max(1000, Math.min(30000, new Date(data.valid_from).getTime() - Date.now())));
         return;
       }
       if (!response.ok) throw new Error('invalid');
@@ -214,6 +216,12 @@ GUEST_PAGE_HTML = """<!doctype html>
       if (!response.ok) throw new Error(data.error || 'Aktion fehlgeschlagen');
       button.textContent = 'Erfolgreich';
       setStatus(actionLabel + ' wurde ausgeführt.', 'success');
+      document.getElementById('uses').textContent = data.remaining_uses === null
+        ? 'Unbegrenzt nutzbar' : data.remaining_uses + ' Nutzung(en)';
+      if (data.remaining_uses === null || data.remaining_uses > 0) {
+        button.disabled = false;
+        button.textContent = actionLabel;
+      }
     } catch (error) {
       button.disabled = false;
       button.textContent = actionLabel;
@@ -272,8 +280,8 @@ class GuestServer:
         """Return whether no access points remain."""
         return not self._access_points
 
-    async def async_start(self) -> None:
-        """Start the standalone aiohttp server."""
+    def create_app(self) -> web.Application:
+        """Build the public application for serving and HTTP integration tests."""
         app = web.Application(client_max_size=16 * 1024)
         app.router.add_get("/gate-pass/assets/icon.png", self._handle_brand_icon)
         app.router.add_get(
@@ -293,7 +301,11 @@ class GuestServer:
             "/gate-pass/api/{pass_id}/{secret}/status", self._handle_status
         )
         app.router.add_post("/gate-pass/api/{pass_id}/{secret}/open", self._handle_open)
-        self._runner = web.AppRunner(app, access_log=None)
+        return app
+
+    async def async_start(self) -> None:
+        """Start the standalone aiohttp server."""
+        self._runner = web.AppRunner(self.create_app(), access_log=None)
         await self._runner.setup()
         # Reverse proxies must be able to reach this dedicated guest port.
         site = web.TCPSite(self._runner, "0.0.0.0", self.port)  # nosec B104
@@ -482,6 +494,11 @@ class GuestServer:
                 {"entity_id": target.config[CONF_ENTITY_ID]},
                 blocking=True,
             )
+        except asyncio.CancelledError:
+            # The device may already have acted. Consume this ambiguous attempt
+            # before letting shutdown finish, rather than authorizing a retry.
+            await target.manager.async_commit_use(pass_id)
+            raise
         except Exception:
             await target.manager.async_release_use(pass_id)
             _LOGGER.exception("Gate Pass action failed")
@@ -505,7 +522,11 @@ class GuestServer:
         await async_send_notification(
             self.hass, target.config, "used", label=guest_pass["label"]
         )
-        return web.json_response({"success": True}, headers=API_HEADERS)
+        max_uses = int(committed["max_uses"])
+        remaining = None if max_uses == 0 else max(0, max_uses - committed["use_count"])
+        return web.json_response(
+            {"success": True, "remaining_uses": remaining}, headers=API_HEADERS
+        )
 
     @staticmethod
     def _check_browser_origin(

@@ -116,6 +116,28 @@ creation, successful use, and revocation. Notification failures never undo or
 consume an additional access action, and one unavailable device does not block
 the remaining devices.
 
+### Link lifecycle and configuration changes
+
+Existing links are bound to the access point's configured entity and action.
+Changing either revokes its outstanding links; changing a name, notification
+setting, or public URL preserves them. On the first upgrade from a version
+without action binding, existing links are adopted for the currently configured
+action. Upgrade before changing the action if existing links must be preserved.
+
+Reloading an access point waits for in-flight actions and use accounting to finish.
+New guest actions are rejected during that short shutdown window. An action
+cancelled during shutdown is conservatively counted because the device may
+already have acted. Normal service errors continue to release the reservation.
+
+Each access point retains at most 200 recent terminal (revoked, expired, or
+exhausted) pass records, plus any terminal records still involved in an in-flight
+action. Active and scheduled passes are never purged by this retention limit.
+The separate activity history remains limited to 200 events.
+
+Unknown entity domains no longer offer every registered service automatically.
+An explicitly configured existing custom action remains available when editing
+its access point.
+
 ### Multiple access points
 
 Each integration entry has its own action, pass storage, defaults, notification
@@ -161,7 +183,7 @@ The integration serves its bundled card from the normal Home Assistant web
 server. In **Settings -> Dashboards -> Resources**, add:
 
 ```text
-/gate-pass/gate-pass-card.js?v=0.5.1
+/gate-pass/gate-pass-card.js?v=0.5.2
 ```
 
 Select **JavaScript module** as the resource type. Reload the browser or app,

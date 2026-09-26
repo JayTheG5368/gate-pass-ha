@@ -250,3 +250,123 @@ async def test_creator_only_sees_and_revokes_owned_passes() -> None:
         "Bob",
         "Legacy",
     ]
+
+
+async def test_terminal_records_are_bounded_without_removing_active_passes():
+    from custom_components.gate_pass.const import TERMINAL_PASS_LIMIT
+
+    from .test_server_http import SnapshotStorage
+
+    storage = SnapshotStorage()
+    manager = PassManager(storage)
+    active, secret = await manager.async_create(
+        label="active", duration_hours=1, max_uses=1
+    )
+    for _ in range(TERMINAL_PASS_LIMIT + 10):
+        record, _ = await manager.async_create(
+            label="old", duration_hours=1, max_uses=1
+        )
+        await manager.async_revoke(record["pass_id"])
+    assert len(storage.data["passes"]) == TERMINAL_PASS_LIMIT + 1
+    assert (await manager.async_get_valid(active["pass_id"], secret))["active"]
+    assert len(await manager.async_list_activity()) <= 200
+
+
+async def test_load_purges_existing_terminal_records():
+    from custom_components.gate_pass.const import TERMINAL_PASS_LIMIT
+
+    from .test_server_http import SnapshotStorage
+
+    storage = SnapshotStorage()
+    storage.data = {
+        "passes": [
+            {"pass_id": str(index), "active": False}
+            for index in range(TERMINAL_PASS_LIMIT + 100)
+        ]
+    }
+    manager = PassManager(storage)
+    await manager.async_load()
+    assert len(storage.data["passes"]) == TERMINAL_PASS_LIMIT
+
+
+async def test_legacy_store_adopts_action_once_and_normal_reload_preserves_links():
+    from .test_server_http import SnapshotStorage
+
+    storage = SnapshotStorage()
+    legacy = PassManager(storage)
+    record, secret = await legacy.async_create(
+        label="old", duration_hours=1, max_uses=1
+    )
+    action = ("button.garage", "button.press")
+    upgraded = PassManager(storage, action=action)
+    await upgraded.async_load()
+    assert storage.data["action"] == list(action)
+    reloaded = PassManager(storage, action=action)
+    await reloaded.async_load()
+    assert (await reloaded.async_get_valid(record["pass_id"], secret))["active"]
+
+
+async def test_shutdown_waits_for_persistence_not_just_action():
+    import asyncio
+
+    from .test_server_http import SnapshotStorage
+
+    storage = SnapshotStorage()
+    manager = PassManager(storage)
+    record, secret = await manager.async_create(
+        label="test", duration_hours=1, max_uses=1
+    )
+    await manager.async_reserve_use(record["pass_id"], secret)
+    saving, finish = asyncio.Event(), asyncio.Event()
+    original_save = storage.async_save
+
+    async def slow_save(data):
+        saving.set()
+        await finish.wait()
+        await original_save(data)
+
+    storage.async_save = slow_save
+    commit = asyncio.create_task(manager.async_commit_use(record["pass_id"]))
+    await saving.wait()
+    shutdown = asyncio.create_task(manager.async_shutdown())
+    await asyncio.sleep(0)
+    assert not shutdown.done()
+    finish.set()
+    await commit
+    await asyncio.wait_for(shutdown, 2)
+    assert storage.data["passes"][0]["use_count"] == 1
+    with pytest.raises(PassUnavailableError):
+        await manager.async_create(label="late", duration_hours=1, max_uses=1)
+
+
+async def test_cancelled_commit_finishes_persistence_before_shutdown():
+    import asyncio
+
+    from .test_server_http import SnapshotStorage
+
+    storage = SnapshotStorage()
+    manager = PassManager(storage)
+    record, secret = await manager.async_create(
+        label="once", duration_hours=1, max_uses=1
+    )
+    await manager.async_reserve_use(record["pass_id"], secret)
+    saving, finish = asyncio.Event(), asyncio.Event()
+    original_save = storage.async_save
+
+    async def slow_save(data):
+        saving.set()
+        await finish.wait()
+        await original_save(data)
+
+    storage.async_save = slow_save
+    commit = asyncio.create_task(manager.async_commit_use(record["pass_id"]))
+    await asyncio.wait_for(saving.wait(), 2)
+    commit.cancel()
+    shutdown = asyncio.create_task(manager.async_shutdown())
+    await asyncio.sleep(0)
+    assert not shutdown.done()
+    finish.set()
+    with pytest.raises(asyncio.CancelledError):
+        await commit
+    await asyncio.wait_for(shutdown, 2)
+    assert storage.data["passes"][0]["use_count"] == 1

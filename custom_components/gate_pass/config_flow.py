@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult, OptionsFlow
 from homeassistant.core import HomeAssistant, callback
@@ -42,6 +41,7 @@ from .const import (
     DEFAULT_NOTIFICATION_EVENTS,
     DOMAIN,
 )
+from .permissions import normalize_user_ids
 from .validation import (
     normalize_notification_events,
     normalize_notification_services,
@@ -49,7 +49,6 @@ from .validation import (
     normalize_service,
     service_domain,
 )
-from .permissions import normalize_user_ids
 
 
 def _notification_service_options(
@@ -141,9 +140,7 @@ def _matching_action_services(
     """Return currently available entity-only actions for one entity domain."""
     domain = str(entity_id).strip().lower().partition(".")[0]
     available = hass.services.async_services_for_domain(domain) if domain else {}
-    return action_services(
-        entity_id, available, current_service=current_service
-    )
+    return action_services(entity_id, available, current_service=current_service)
 
 
 def _action_schema(services: list[str], current_service: str = "") -> vol.Schema:
@@ -251,9 +248,7 @@ def _schema(
             ),
             vol.Required(
                 CONF_CREATOR_MAX_USES,
-                default=current.get(
-                    CONF_CREATOR_MAX_USES, DEFAULT_CREATOR_MAX_USES
-                ),
+                default=current.get(CONF_CREATOR_MAX_USES, DEFAULT_CREATOR_MAX_USES),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=1,
@@ -358,8 +353,7 @@ def _validate(user_input: dict[str, Any]) -> dict[str, Any]:
         is True
     )
     result[CONF_EXPOSE_LAST_USED_LABEL] = (
-        result.get(CONF_EXPOSE_LAST_USED_LABEL, DEFAULT_EXPOSE_LAST_USED_LABEL)
-        is True
+        result.get(CONF_EXPOSE_LAST_USED_LABEL, DEFAULT_EXPOSE_LAST_USED_LABEL) is True
     )
     result[CONF_NOTIFICATION_SERVICES] = normalize_notification_services(
         result.get(CONF_NOTIFICATION_SERVICES, [])
@@ -462,9 +456,7 @@ class GatePassConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entity_id = str(pending[CONF_ENTITY_ID])
         return self.async_show_form(
             step_id="action",
-            data_schema=_action_schema(
-                services, getattr(self, "_action_default", "")
-            ),
+            data_schema=_action_schema(services, getattr(self, "_action_default", "")),
             errors=errors,
             description_placeholders={
                 "entity_id": entity_id,
@@ -542,9 +534,7 @@ class GatePassOptionsFlow(OptionsFlow):
         entity_id = str(pending[CONF_ENTITY_ID])
         return self.async_show_form(
             step_id="action",
-            data_schema=_action_schema(
-                services, getattr(self, "_action_default", "")
-            ),
+            data_schema=_action_schema(services, getattr(self, "_action_default", "")),
             errors=errors,
             description_placeholders={
                 "entity_id": entity_id,
